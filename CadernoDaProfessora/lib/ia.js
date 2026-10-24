@@ -3,7 +3,7 @@
 //   Fotos:  Gemma 4 pela API do Google (GEMINI_API_KEY) → Gemma 4 / Nemotron VL pelo OpenRouter (OPENROUTER_API_KEY)
 //   Textos: Gemma 4 31B / Nemotron 3 Ultra pelo OpenRouter → Gemma 4 pelo Google
 //   (MISTRAL_API_KEY entra na frente se existir — o plano Free da Mistral não libera API hoje.)
-import { REGRAS_TRANSCRICAO, REGRAS_ANEXO, REGRAS_PROVA, REGRAS_REVISOES, REGRAS_AJUSTE } from './regras.js';
+import { REGRAS_TRANSCRICAO, REGRAS_ANEXO, REGRAS_PROVA, REGRAS_QUESTAO, REGRAS_REVISOES, REGRAS_AJUSTE } from './regras.js';
 
 export class ErroIA extends Error {}
 class Pular extends Error {} // falha que justifica tentar o próximo provedor
@@ -282,9 +282,9 @@ const TOOL_PLANO_PROVA = {
   },
 };
 const TOOL_QUESTOES = {
-  name: 'registrar_questoes',
-  description: 'Registra as questões deste lote, já escritas por inteiro com gabarito.',
-  input_schema: { type: 'object', properties: { questoes: { type: 'array', items: QUESTAO } }, required: ['questoes'] },
+  name: 'registrar_questao',
+  description: 'Registra UMA questão, já escrita por inteiro e com gabarito.',
+  input_schema: { type: 'object', properties: { questoes: { type: 'array', description: 'Exatamente uma questão.', items: QUESTAO } }, required: ['questoes'] },
 };
 const TOOL_PLANO_REVISOES = {
   name: 'registrar_plano_revisoes',
@@ -322,10 +322,10 @@ export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas }) {
   const txt = blocoContexto({ ...ctx, conteudos: [] })
     + `\n===== TRECHO DA APOSTILA PARA ESTE LOTE =====\n${trecho}\n`
     + (jaFeitas.length ? `\n===== QUESTÕES JÁ ESCRITAS NESTA PROVA (não repetir assunto nem formato) =====\n${jaFeitas.map((q, i) => `${i + 1}. [${q.tipo}] ${q.enunciado}`).join('\n')}\n` : '')
-    + `\n===== ESCREVA AGORA SÓ ESTAS QUESTÕES =====\n`
-    + lote.map(q => `- Questão ${q.n}: tipo "${q.tipo}", assunto "${q.assunto}", vale ${q.pontos}.`).join('\n')
-    + `\n\nEscreva cada uma por inteiro (enunciado, itens, gabarito e respostas_chave), seguindo o modelo do Pirralho. Mantenha exatamente o tipo e a pontuação indicados.`;
-  return chamarIA({ system: REGRAS_PROVA, tool: TOOL_QUESTOES, maxTokens: 1600, content: [{ type: 'text', text: txt }] });
+    + `\n===== A QUESTÃO QUE VOCÊ DEVE ESCREVER AGORA =====\n`
+    + lote.map(q => `Questão ${q.n} de ${plano?.questoes?.length || 10}: tipo "${q.tipo}", assunto "${q.assunto}", vale ${q.pontos}.`).join('\n')
+    + `\n\nEscreva SÓ essa questão, por inteiro (enunciado, itens, gabarito, pontuacao e respostas_chave). Mantenha exatamente o tipo e a pontuação indicados. Devolva "questoes" com um único item.`;
+  return chamarIA({ system: REGRAS_QUESTAO, tool: TOOL_QUESTOES, maxTokens: 1600, content: [{ type: 'text', text: txt }] });
 }
 
 export async function planejarRevisoes(ctx, { mapa, prova, proibidos }) {

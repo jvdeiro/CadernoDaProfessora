@@ -126,3 +126,35 @@ Você vai receber a prova completa e a lista de termos proibidos. Nenhum termo p
 export const REGRAS_AJUSTE = `
 A professora pediu um ajuste. Faça EXATAMENTE o que ela pediu, mantendo todo o resto igual e mantendo todas as regras (escopo, pontuação somando 10,0, nenhuma questão entregando outra, revisão sem nada igual à prova). Devolva o material completo, já ajustado.
 `.trim();
+
+// Prompt focado em UMA questão. O REGRAS_PROVA manda "montar uma PROVA" com 10 questões,
+// abertura, soma 10,0 e 40 a 90 termos proibidos — mandar isso para escrever uma única questão
+// fazia o modelo tentar gerar a prova inteira a cada chamada, estourando o tempo.
+export const REGRAS_QUESTAO = `
+${CONTEXTO_ESCOLA}
+
+TAREFA: escrever UMA ÚNICA questão de prova, já pronta e com gabarito, no modelo da Escola Pirralho.
+Você NÃO está montando a prova inteira: o plano dela já existe e outra chamada cuida das demais questões.
+Escreva somente a questão pedida. Nada de abertura, nada de lista de termos proibidos, nada de resumo da prova.
+
+Escopo (regra rígida):
+- Use SOMENTE o que está no trecho da apostila enviado. Nada de fora dele, mesmo que seja verdade.
+- Não cobre nada listado em "Pontos a conferir" (anexo de erros).
+- A resposta deve ser exatamente o que a apostila diz.
+- Não peça para identificar imagens (a prova não tem fotos).
+
+Como deve ser a questão:
+- Mantenha EXATAMENTE o tipo e a pontuação que foram pedidos.
+- Enunciado curto e LÚDICO, pensado para a idade da turma: "Adivinhe quem sou!", "Verdade ou mentira?", "Pinte a alternativa correta!", "Detetive das leis!", "Hora do cafezinho!". Crie um novo no mesmo espírito, ligado ao assunto.
+- Questão DE CONTEXTO, nunca definição seca. Em vez de "O que é uma falésia?", escreva "Formações rochosas altas e íngremes à beira-mar, desgastadas pela ação das ondas, são chamadas de ______." O enunciado descreve e a criança nomeia. A exceção é o tipo "defina", em que a palavra aparece numa frase.
+- Distratores (alternativas erradas, palavras que sobram) plausíveis e, de preferência, tirados da própria apostila.
+- Não repita o assunto nem o formato das questões já escritas que forem enviadas.
+- NUNCA entregue a resposta de uma questão já escrita: nenhuma resposta delas pode aparecer no seu enunciado ou nas suas opções.
+
+Preencha também:
+- "gabarito": uma linha por item, com a resposta e a página entre colchetes, por exemplo "a) Ipiranga [dig. p. 62]" ou "b) V [fís. p. 4]" (dig. = apostila digital, fís. = apostila física; se só houver uma apostila, use [p. 12]). Em "F", explique em poucas palavras o certo.
+- "pontuacao": por exemplo "1,0 · 0,25 cada".
+- "respostas_chave": as respostas curtas (palavras, nomes, números) que a criança precisa escrever ou escolher.
+
+${TIPOS_QUESTAO}
+`.trim();
