@@ -1,8 +1,9 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Icone from '@/components/Icone';
+import { postPersistente } from '@/lib/persistente';
 
 async function reduzir(file) {
   const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
@@ -13,26 +14,51 @@ async function reduzir(file) {
   return await new Promise(res => cv.toBlob(res, 'image/jpeg', 0.86));
 }
 const ROT = ['-2deg', '1.5deg', '-1deg', '2deg', '0deg'];
-const ST = { enviada: 'Na fila', lendo: 'Lendo…', lida: 'Lida', erro: 'Deu erro', fora: 'Fora do assunto', enviando: 'Enviando…' };
+const PRESO_MS = 6 * 60 * 1000; // a leitura no servidor dura no máximo 5 min; depois disso a foto volta para a fila
+const parada = p => p.status === 'lendo' && (!p.lendoEm || Date.now() - new Date(p.lendoEm).getTime() > PRESO_MS);
+const ST = { enviada: 'Na fila', esperando: 'Esperando IA', lendo: 'Lendo…', lida: 'Lida', erro: 'Deu erro', fora: 'Fora do assunto', enviando: 'Enviando…' };
 
-async function post(url) {
-  const r = await fetch(url, { method: 'POST' });
-  let j = {}; try { j = await r.json(); } catch {}
-  if (!r.ok) throw new Error(j.erro || 'Algo deu errado. Tente de novo.');
-  return j;
-}
 
 export default function Paginas({ conteudoId, iniciais, pronto }) {
   const [pags, setPags] = useState(iniciais);
   const [fase, setFase] = useState('');
   const [erro, setErro] = useState('');
   const [prog, setProg] = useState({ f: 0, t: 0 });
+  const [espera, setEspera] = useState(0);
   const input = useRef(null);
   const router = useRouter();
   const sb = createClient();
   const ocupado = !!fase;
-  const pendentes = pags.filter(p => ['enviada', 'erro'].includes(p.status));
+  const pendentes = pags.filter(p => ['enviada', 'erro'].includes(p.status) || parada(p));
+  const noServidor = pags.filter(p => p.status === 'lendo' && !parada(p));
+  const prontas = pags.filter(p => ['lida', 'fora'].includes(p.status)).length;
   const precisaOrganizar = !pronto || pags.some(p => p.novo);
+  // Leitura interrompida (tela fechada, F5, sem IA livre): ao abrir de novo, continua sozinha.
+  const retomar = useRef(iniciais.some(p => p.status === 'enviada' || p.status === 'lendo'));
+
+  // Depois de recarregar a tela: acompanha as fotos que o servidor ainda está lendo e, quando acabarem, continua sozinho.
+  useEffect(() => {
+    if (fase || !noServidor.length) return;
+    const ids = noServidor.map(p => p.id);
+    const t = setInterval(async () => {
+      const { data } = await sb.from('paginas').select('id,status,erro,lendo_em,folhas:transcricao->paginas').in('id', ids);
+      if (!data) return;
+      setPags(ps => ps.map(p => {
+        const d = data.find(x => x.id === p.id);
+        return d ? { ...p, status: d.status, erro: d.erro, lendoEm: d.lendo_em, numero: (d.folhas || []).map(x => x.numero).filter(Boolean).join(', ') || p.numero } : p;
+      }));
+    }, 5000);
+    return () => clearInterval(t);
+  }, [fase, noServidor.map(p => p.id).join()]);
+
+  useEffect(() => {
+    if (!retomar.current || fase || noServidor.length) return;
+    retomar.current = false;
+    (async () => {
+      if (pendentes.length) await lerTodas(pendentes);
+      await organizar();
+    })();
+  }, [fase, noServidor.length]);
 
   const atualiza = (id, mud) => setPags(ps => ps.map(p => (p.id === id ? { ...p, ...mud } : p)));
 
@@ -43,8 +69,13 @@ export default function Paginas({ conteudoId, iniciais, pronto }) {
     const trabalhador = async () => {
       while (fila.length) {
         const p = fila.shift();
-        atualiza(p.id, { status: 'lendo' });
-        try { const j = await post(`/api/paginas/${p.id}/ler`); atualiza(p.id, { status: j.status, numero: j.numero }); }
+        atualiza(p.id, { status: 'lendo', lendoEm: new Date().toISOString() });
+        try {
+          const j = await postPersistente(`/api/paginas/${p.id}/ler`, null, {
+            aoEsperar: s => { setEspera(s); atualiza(p.id, s ? { status: 'esperando' } : { status: 'lendo', lendoEm: new Date().toISOString() }); },
+          });
+          atualiza(p.id, { status: j.status, numero: j.numero });
+        }
         catch (e) { atualiza(p.id, { status: 'erro', erro: e.message }); setErro(e.message); }
         feitas++; setProg({ f: feitas, t: lista.length });
       }
@@ -53,7 +84,7 @@ export default function Paginas({ conteudoId, iniciais, pronto }) {
   }
   async function organizar() {
     setFase('organizando'); setErro('');
-    try { await post(`/api/conteudos/${conteudoId}/organizar`); setPags(ps => ps.map(p => ({ ...p, novo: false }))); router.refresh(); }
+    try { await postPersistente(`/api/conteudos/${conteudoId}/organizar`, null, { aoEsperar: setEspera }); setPags(ps => ps.map(p => ({ ...p, novo: false }))); router.refresh(); }
     catch (e) { setErro(e.message); }
     setFase('');
   }
@@ -95,13 +126,16 @@ export default function Paginas({ conteudoId, iniciais, pronto }) {
         <input ref={input} type="file" accept="image/*" multiple onChange={escolher} />
       </label>
 
-      {fase && (
+      {(fase || noServidor.length > 0) && (
         <div className="carregando" role="status" aria-live="polite">
           <Icone n="lapis" className="lapis" />
           <div style={{ flex: 1 }}>
-            <b>{fase === 'enviando' ? `Enviando fotos (${prog.f} de ${prog.t})…` : fase === 'lendo' ? `Lendo as páginas (${prog.f} de ${prog.t})…` : 'Organizando o resumo e conferindo erros da apostila…'}</b>
-            <div className="pequeno">{fase === 'organizando' ? 'Isso leva uns 2 minutos. Pode deixar a tela aberta.' : 'Pode deixar a tela aberta enquanto isso.'}</div>
-            {fase !== 'organizando' && <div className="progresso"><i style={{ width: `${prog.t ? (prog.f / prog.t) * 100 : 0}%` }} /></div>}
+            <b>{fase === 'enviando' ? `Enviando fotos (${prog.f} de ${prog.t})…` : fase === 'organizando' ? 'Organizando o resumo e conferindo erros da apostila…' : `Lendo as páginas: ${prontas} de ${pags.length} prontas`}</b>
+            <div className="pequeno">{fase === 'organizando' ? 'Isso leva uns 2 minutos. Pode deixar a tela aberta.'
+              : fase === 'enviando' ? 'Pode deixar a tela aberta enquanto isso.'
+              : `Lendo agora: ${noServidor.length} ${noServidor.length === 1 ? 'foto' : 'fotos'}. Cada uma leva de 20 segundos a 2 minutos. Se fechar ou recarregar a tela, nada se perde: ao voltar, continua de onde parou.`}</div>
+            {espera > 0 && <div className="pequeno" style={{ marginTop: 6 }}><b style={{ font: 'inherit', fontWeight: 600, display: 'inline' }}>Todas as IAs gratuitas estão ocupadas agora.</b> Tentando de novo em {espera} s, sozinho. Não precisa fazer nada.</div>}
+            {fase !== 'organizando' && <div className="progresso"><i style={{ width: `${fase === 'enviando' ? (prog.t ? (prog.f / prog.t) * 100 : 0) : (pags.length ? (prontas / pags.length) * 100 : 0)}%` }} /></div>}
           </div>
         </div>
       )}
@@ -119,8 +153,8 @@ export default function Paginas({ conteudoId, iniciais, pronto }) {
           ))}
         </div>
       )}
-      {!ocupado && pendentes.length > 0 && <button className="botao pastel cheio" onClick={async () => { await lerTodas(pendentes); await organizar(); }}>Ler as fotos que faltam</button>}
-      {!ocupado && !pendentes.length && pags.length > 0 && precisaOrganizar && <button className="botao cheio" onClick={organizar}>Organizar o resumo</button>}
+      {!ocupado && !noServidor.length && pendentes.length > 0 && <button className="botao pastel cheio" onClick={async () => { await lerTodas(pendentes); await organizar(); }}>Ler as fotos que faltam</button>}
+      {!ocupado && !noServidor.length && !pendentes.length && pags.length > 0 && precisaOrganizar && <button className="botao cheio" onClick={organizar}>Organizar o resumo</button>}
     </section>
   );
 }

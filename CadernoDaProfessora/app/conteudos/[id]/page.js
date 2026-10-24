@@ -12,11 +12,11 @@ export default async function Conteudo({ params }) {
   if (!membro) return <SemAcesso email={user?.email} />;
   const { data: c } = await sb.from('conteudos').select('*,turmas(id,nome,cor),materias(nome,cor)').eq('id', id).single();
   if (!c) return <Vazio titulo="Conteúdo não encontrado" />;
-  const { data: pags } = await sb.from('paginas').select('id,storage_path,ordem,status,erro,transcricao').eq('conteudo_id', id).order('ordem');
+  const { data: pags } = await sb.from('paginas').select('id,storage_path,ordem,status,erro,transcricao,lendo_em').eq('conteudo_id', id).order('ordem');
   const paths = (pags || []).map(p => p.storage_path);
   const { data: urls } = paths.length ? await sb.storage.from('paginas').createSignedUrls(paths, 3600) : { data: [] };
   const lista = (pags || []).map((p, i) => ({
-    id: p.id, status: p.status, erro: p.erro, url: urls?.[i]?.signedUrl,
+    id: p.id, status: p.status, erro: p.erro, lendoEm: p.lendo_em, url: urls?.[i]?.signedUrl,
     numero: p.transcricao?.paginas?.map(x => x.numero).filter(Boolean).join(', ') || null,
   }));
   const info = c.info || {};
