@@ -3,6 +3,7 @@ import { contexto, cor } from '@/lib/dados';
 import { SemAcesso, Voltar } from '@/components/UI';
 import { criarAvaliacao } from '@/app/acoes';
 import EscolhaConteudos from './EscolhaConteudos';
+import BotaoCriar from './BotaoCriar';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,7 @@ export default async function Nova({ searchParams }) {
           <textarea name="pedidos" placeholder="Ex.: Quero questões de pinte a alternativa, complete com o quadro e defina. Pode ser mais lúdica." />
           <small>Não precisa explicar o modelo da prova: o sistema já sabe.</small>
         </label>
-        <button className="botao cheio">Criar e continuar</button>
+        <BotaoCriar />
       </form>
       <p className="suave pequeno" style={{ marginTop: 16 }}>O conteúdo ainda não está aqui? <Link href="/conteudos/novo">Mande as fotos da apostila primeiro</Link>.</p>
     </>

@@ -253,6 +253,88 @@ function blocoContexto({ turma, idade, materia, nome, data, conteudos, historico
   return t;
 }
 
+// ---------- etapas (pedidos pequenos, para caber nas IAs gratuitas) ----------
+const TIPOS = ['pinte', 'assinale', 'vf', 'marque_x', 'letras', 'complete_quadro', 'complete', 'numere', 'adivinhe', 'responda', 'defina', 'texto', 'cruzadinha', 'quadrinhos'];
+
+const TOOL_PLANO_PROVA = {
+  name: 'registrar_plano_prova',
+  description: 'Registra o plano da prova: a abertura e a lista de questões previstas, sem escrevê-las ainda.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      abertura: str,
+      questoes: { type: 'array', items: { type: 'object', properties: {
+        tipo: { type: 'string', enum: TIPOS }, assunto: str, paginas: str, pontos: str,
+      }, required: ['tipo', 'assunto', 'pontos'] } },
+    },
+    required: ['abertura', 'questoes'],
+  },
+};
+const TOOL_QUESTOES = {
+  name: 'registrar_questoes',
+  description: 'Registra as questões deste lote, já escritas por inteiro com gabarito.',
+  input_schema: { type: 'object', properties: { questoes: { type: 'array', items: QUESTAO } }, required: ['questoes'] },
+};
+const TOOL_PLANO_REVISOES = {
+  name: 'registrar_plano_revisoes',
+  description: 'Registra o plano das fichas de revisão, sem escrever as perguntas ainda.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      comando: str,
+      fichas: { type: 'array', items: { type: 'object', properties: { tema: str, paginas: str }, required: ['tema'] } },
+    },
+    required: ['fichas'],
+  },
+};
+const TOOL_FICHAS = {
+  name: 'registrar_fichas',
+  description: 'Registra as fichas deste lote, com perguntas e respostas.',
+  input_schema: { type: 'object', properties: { fichas: { type: 'array', items: { type: 'object', properties: {
+    tema: str, perguntas: { type: 'array', items: { type: 'object', properties: { texto: str, resposta: str }, required: ['texto', 'resposta'] } },
+  }, required: ['tema', 'perguntas'] } } }, required: ['fichas'] },
+};
+
+// Plano da prova: recebe só os tópicos e o anexo, nunca o resumo inteiro.
+export async function planejarProva(ctx, { mapa }) {
+  const txt = blocoContexto({ ...ctx, conteudos: [] })
+    + `\n===== ASSUNTOS DISPONÍVEIS (use as páginas para localizar o conteúdo depois) =====\n${mapa}\n`
+    + `\nMonte APENAS O PLANO da prova agora: a frase de abertura e a lista de questões previstas.`
+    + `\nPara cada questão diga o tipo, o assunto, as páginas de onde sai e a pontuação.`
+    + `\nA soma das pontuações TEM que dar exatamente 10,0. Use pelo menos 7 tipos diferentes e não repita o mesmo tipo em questões seguidas.`
+    + `\nNÃO escreva os enunciados nem as alternativas ainda.`;
+  return chamarIA({ system: REGRAS_PROVA, tool: TOOL_PLANO_PROVA, maxTokens: 4000, content: [{ type: 'text', text: txt }] });
+}
+
+// Um lote de questões: recebe só o trecho das páginas que ele cobre.
+export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas }) {
+  const txt = blocoContexto({ ...ctx, conteudos: [] })
+    + `\n===== TRECHO DA APOSTILA PARA ESTE LOTE =====\n${trecho}\n`
+    + (jaFeitas.length ? `\n===== QUESTÕES JÁ ESCRITAS NESTA PROVA (não repetir assunto nem formato) =====\n${jaFeitas.map((q, i) => `${i + 1}. [${q.tipo}] ${q.enunciado}`).join('\n')}\n` : '')
+    + `\n===== ESCREVA AGORA SÓ ESTAS QUESTÕES =====\n`
+    + lote.map(q => `- Questão ${q.n}: tipo "${q.tipo}", assunto "${q.assunto}", vale ${q.pontos}.`).join('\n')
+    + `\n\nEscreva cada uma por inteiro (enunciado, itens, gabarito e respostas_chave), seguindo o modelo do Pirralho. Mantenha exatamente o tipo e a pontuação indicados.`;
+  return chamarIA({ system: REGRAS_PROVA, tool: TOOL_QUESTOES, maxTokens: 7000, content: [{ type: 'text', text: txt }] });
+}
+
+export async function planejarRevisoes(ctx, { mapa, prova, proibidos }) {
+  const txt = blocoContexto({ ...ctx, conteudos: [] })
+    + `\n===== ASSUNTOS DISPONÍVEIS =====\n${mapa}\n`
+    + `\n===== RESUMO DA PROVA (as revisões não podem repetir nada disto) =====\n${(prova.resumo_questoes || []).join('\n')}\n`
+    + `\n===== TERMOS PROIBIDOS =====\n${proibidos.join(' | ')}\n`
+    + `\nMonte APENAS O PLANO: o comando das fichas e os 8 temas, com as páginas de cada um. NÃO escreva as perguntas ainda.`;
+  return chamarIA({ system: REGRAS_REVISOES, tool: TOOL_PLANO_REVISOES, maxTokens: 2500, content: [{ type: 'text', text: txt }] });
+}
+
+export async function escreverFichas(ctx, { lote, trecho, proibidos, jaFeitas }) {
+  const txt = blocoContexto({ ...ctx, conteudos: [] })
+    + `\n===== TRECHO DA APOSTILA PARA ESTE LOTE =====\n${trecho}\n`
+    + `\n===== TERMOS PROIBIDOS (nem nas perguntas nem nas respostas) =====\n${proibidos.join(' | ')}\n`
+    + (jaFeitas.length ? `\n===== PERGUNTAS JÁ FEITAS (não repetir) =====\n${jaFeitas.join('\n')}\n` : '')
+    + `\n===== ESCREVA AGORA SÓ ESTAS FICHAS =====\n${lote.map(f => `- Ficha "${f.tema}" (páginas ${f.paginas || '—'})`).join('\n')}`;
+  return chamarIA({ system: REGRAS_REVISOES, tool: TOOL_FICHAS, maxTokens: 6000, content: [{ type: 'text', text: txt }] });
+}
+
 export async function gerarProva(ctx, { atual, ajuste } = {}) {
   let txt = blocoContexto(ctx);
   if (atual) {

@@ -5,6 +5,8 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { lerPagina, organizarConteudo } from '@/lib/leitura';
 import { avisar } from '@/lib/push';
+import { gerarProvaEtapas, gerarRevisoesEtapas } from '@/lib/geracao';
+import { carregarAvaliacao } from '@/lib/avaliacao';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -75,5 +77,39 @@ export async function POST(req) {
       break; // uma organização por rodada
     }
   }
+  // 3) Avaliações: prova e revisões também saem em etapas, retomando de onde pararam
+  if (Date.now() - inicio < 150000) {
+    const { data: avs } = await sb.from('avaliacoes').select('id,nome,processando,pausa_ate,gerando_em').not('processando', 'is', null);
+    for (const a of avs || []) {
+      if (a.pausa_ate && new Date(a.pausa_ate) > new Date()) continue;
+      const limite = new Date(Date.now() - 6 * 60000).toISOString();
+      const { data: travou } = await sb.from('avaliacoes').update({ gerando_em: new Date().toISOString() })
+        .eq('id', a.id).or(`gerando_em.is.null,gerando_em.lt.${limite}`).select('id');
+      if (!travou?.length) continue;
+      try {
+        const d = await carregarAvaliacao(sb, a.id);
+        if (!d) throw new Error('avaliação sumiu');
+        const fn = a.processando === 'revisoes' ? gerarRevisoesEtapas : gerarProvaEtapas;
+        const r = await fn(sb, a.id, { ...d, prazo: inicio + 260000 });
+        if (r.pendente) {
+          await sb.from('avaliacoes').update({ gerando_em: null }).eq('id', a.id);
+          feitos.push(`${a.processando} ${a.nome}: ${r.etapa} ${r.feitas || 0}/${r.total ?? '?'}`);
+          break;
+        }
+        await sb.from('avaliacoes').update({ processando: null, gerando_em: null, pausa_ate: null, ultimo_erro: null }).eq('id', a.id);
+        await avisar(sb, {
+          titulo: a.processando === 'revisoes' ? 'Revisões prontas! 📝' : 'Prova pronta! ✏️',
+          corpo: `${a.nome}: ${a.processando === 'revisoes' ? 'as 8 fichas estão prontas' : 'a prova e o gabarito estão prontos'}. Dá para conferir e imprimir.`,
+          url: `/avaliacoes/${a.id}`,
+        }, { vapidPrivada: cred.vapid_privada, vapidPublica: cred.vapid_publica });
+        feitos.push(`${a.processando} ${a.nome}: pronto`);
+      } catch (e) {
+        await sb.from('avaliacoes').update({ gerando_em: null, ultimo_erro: `${a.processando}: ${e.message}`.slice(0, 900), ...(e.temporario ? { pausa_ate: daqui(PAUSA_SEM_IA_S) } : { processando: null }) }).eq('id', a.id);
+        feitos.push(`${a.processando} ${a.nome}: ${e.message}`);
+      }
+      break; // uma avaliação por rodada
+    }
+  }
+
   return NextResponse.json({ ok: true, feitos, ms: Date.now() - inicio });
 }

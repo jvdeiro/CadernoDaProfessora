@@ -14,6 +14,11 @@ export async function POST(req, { params }) {
   if (!dados) return NextResponse.json({ erro: 'Avaliação não encontrada.' }, { status: 404 });
   const { av, ctx } = dados;
   if (!av.prova) return NextResponse.json({ erro: 'Crie a prova primeiro.' }, { status: 400 });
+  if (!body.ajuste && !body.corrigir) {
+    // Criar do zero: vai para o robô do servidor, que escreve em etapas e salva cada uma.
+    await sb.from('avaliacoes').update({ processando: 'revisoes', geracao: null, gerando_em: null, pausa_ate: null, ultimo_erro: null }).eq('id', id);
+    return NextResponse.json({ enfileirado: true });
+  }
   let ajuste = body.ajuste;
   if (body.corrigir && av.checagens?.revisoes?.problemas?.length) ajuste = 'A conferência automática achou coisas da prova nas revisões. Troque SÓ estas perguntas por outros fatos do mesmo assunto, sem usar nenhum termo proibido:\n- ' + av.checagens.revisoes.problemas.join('\n- ');
   const atual = ajuste && av.revisoes ? av.revisoes : null;
