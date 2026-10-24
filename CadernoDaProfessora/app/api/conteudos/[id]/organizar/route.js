@@ -28,6 +28,6 @@ export async function POST(req, { params }) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     await sb.from('conteudos').update({ resumo_md: resumo, updated_at: new Date().toISOString() }).eq('id', id);
-    return NextResponse.json({ erro: e.message }, { status: 500 });
+    return NextResponse.json({ erro: e.message, esperar: !!e.temporario }, { status: e.temporario ? 503 : 500 });
   }
 }
