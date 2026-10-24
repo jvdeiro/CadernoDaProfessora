@@ -328,7 +328,10 @@ export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas }) {
   // questão era mandar todas as provas anteriores dez vezes.
   const txt = blocoContexto({ ...ctx, conteudos: [], historico: '' })
     + `\n===== TRECHO DA APOSTILA PARA ESTE LOTE =====\n${trecho}\n`
-    + (jaFeitas.length ? `\n===== QUESTÕES JÁ ESCRITAS NESTA PROVA (não repetir assunto nem formato) =====\n${jaFeitas.map((q, i) => `${i + 1}. [${q.tipo}] ${q.enunciado}`).join('\n')}\n` : '')
+    // As RESPOSTAS das questões já escritas vão junto: antes iam só os enunciados, e a questão 2
+    // pôs no quadro "Primeiro Reinado", que era a resposta da questão 1.
+    + (jaFeitas.length ? `\n===== QUESTÕES JÁ ESCRITAS NESTA PROVA =====\n${jaFeitas.map((q, i) => `${i + 1}. [${q.tipo}] ${q.enunciado} — respostas: ${(q.respostas_chave || []).join(', ') || '—'}`).join('\n')}\n`
+      + `\nNENHUMA dessas respostas pode aparecer na sua questão: nem no enunciado, nem nas opções, nem no quadro de palavras. Não repita assunto nem formato delas.\n` : '')
     + `\n===== A QUESTÃO QUE VOCÊ DEVE ESCREVER AGORA =====\n`
     + lote.map(q => `Questão ${q.n} de ${plano?.questoes?.length || 10}: tipo "${q.tipo}", assunto "${q.assunto}", vale ${q.pontos}.`).join('\n')
     + `\n\nEscreva SÓ essa questão, por inteiro (enunciado, itens, gabarito, pontuacao e respostas_chave). Mantenha exatamente o tipo e a pontuação indicados. Devolva "questoes" com um único item.`;
