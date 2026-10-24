@@ -23,12 +23,12 @@ export default function Avisos() {
     if (Notification.permission === 'granted') inscreverAvisos().then(setEstado).catch(() => setEstado('pedir'));
     else setEstado(Notification.permission === 'denied' ? 'negado' : 'pedir');
   }, []);
-  if (estado === 'ok' || !estado) return <p className="pequeno avisado">🔔 Pode fechar o app. Vamos te avisar com uma notificação quando ficar pronto.</p>;
-  if (estado === 'sem-suporte') return <p className="pequeno avisado">Pode fechar o app: a leitura continua sozinha. No iPhone, para receber o aviso de pronto, instale o app na tela inicial (Compartilhar → Adicionar à Tela de Início).</p>;
-  if (estado === 'negado') return <p className="pequeno avisado">Pode fechar o app: a leitura continua sozinha. As notificações estão bloqueadas nas configurações do celular para este site.</p>;
+  if (estado === 'ok' || !estado) return <p className="pequeno avisado">🔔 Vamos te avisar com uma notificação quando terminar. Pode fechar o app.</p>;
+  if (estado === 'sem-suporte') return <p className="pequeno avisado">Pode fechar o app: continua sozinho. Para receber a notificação quando terminar, no iPhone instale o app na tela inicial (Compartilhar → Adicionar à Tela de Início).</p>;
+  if (estado === 'negado') return <p className="pequeno avisado">Pode fechar o app: continua sozinho. As notificações estão bloqueadas nas configurações do celular para este site.</p>;
   return (
     <div className="avisado">
-      <p className="pequeno" style={{ margin: '0 0 8px' }}>Pode fechar o app: a leitura continua sozinha.</p>
+      <p className="pequeno" style={{ margin: '0 0 8px' }}>Pode fechar o app: continua sozinho.</p>
       <button className="botao pastel pequeno" style={{ '--c': 'var(--amarelo)' }} onClick={async () => setEstado(await inscreverAvisos().catch(() => 'pedir'))}>🔔 Me avisar quando ficar pronto</button>
     </div>
   );

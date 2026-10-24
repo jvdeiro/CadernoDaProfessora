@@ -224,11 +224,7 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
           <Icone n="lapis" className="lapis" />
           <div style={{ flex: 1, minWidth: 0 }}>
             <b>{proc.organizando || organizandoManual ? 'Organizando o resumo…' : `Lendo as páginas: ${prontas} de ${total} prontas`}</b>
-            <div className="pequeno">
-              {pausaRestante > 0
-                ? <>As IAs gratuitas pediram uma pausa. Volto a ler em {pausaRestante} s, sozinho.</>
-                : <>Tempo restante estimado: <b className="eta">{tempoRestante(proc.organizando ? 90 : eta)}</b></>}
-            </div>
+            <div className="pequeno">Tempo restante estimado: <b className="eta">{tempoRestante(proc.organizando ? 90 + pausaRestante : eta)}</b></div>
             <div className="progresso"><i style={{ width: `${total ? ((proc.organizando ? total : prontas) / total) * 100 : 0}%` }} /></div>
             <Avisos />
           </div>
