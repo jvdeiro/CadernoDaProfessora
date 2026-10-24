@@ -18,7 +18,8 @@ async function reduzir(file) {
 }
 const ST = { enviada: 'Na fila', lendo: 'Lendo…', lida: 'Lida', erro: 'Deu erro', fora: 'Fora do assunto' };
 const SEG_POR_FOTO = 35;          // estimativa inicial (leitura + respiro), ajustada pelo ritmo real
-const ESPERAS_OFFLINE = [5, 10, 20, 30];
+const INTERVALO_S = 15;           // de quanto em quanto tempo a tela confere o andamento
+const ESPERAS_OFFLINE = [10, 20, 30];
 const numeroDe = folhas => (folhas || []).map(x => x.numero).filter(Boolean).join(', ') || null;
 const num = s => { const m = String(s || '').match(/\d+/); return m ? parseInt(m[0]) : 99999; };
 // Ordem da apostila: fotos já catalogadas primeiro (digital, depois física, por número de página); as outras no fim.
@@ -108,7 +109,6 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
 
   const atualizar = useCallback(async () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) throw new Error('offline');
-    const t0 = Date.now();
     setSinc(s => ({ ...s, estado: 'atualizando' }));
     const [{ data: ps, error: e1 }, { data: c, error: e2 }] = await Promise.all([
       sb.from('paginas').select('id,status,erro,lendo_em,folhas:transcricao->paginas,origem:transcricao->>origem').eq('conteudo_id', conteudoId),
@@ -120,8 +120,6 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
       if (antes.processando && !c.processando) setTimeout(() => router.refresh(), 300); // terminou: mostra o resumo
       return { processando: c.processando, pausaAte: c.pausa_ate, organizando: !!c.organizando_em };
     });
-    const resto = 3000 - (Date.now() - t0); // a cobrinha gira pelo menos ~3 s, para dar para ver
-    if (resto > 0) await new Promise(r => setTimeout(r, resto));
     setSinc({ estado: 'ok', ultima: Date.now(), falhas: 0, desde: null, proxima: 0 });
   }, [conteudoId]);
 
@@ -130,7 +128,7 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
     if (!ativo) return;
     let parar = false, timer;
     const ciclo = async () => {
-      let espera = 5;
+      let espera = INTERVALO_S;
       try { await atualizar(); }
       catch {
         setSinc(s => {
@@ -196,7 +194,7 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
     ultima: new Date(sinc.ultima).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     desde: sinc.desde ? new Date(sinc.desde).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
     proxima: Math.max(0, Math.round((sinc.proxima - agora) / 1000)),
-    intervalo: 5,
+    intervalo: INTERVALO_S,
   };
   const ocupado = !!envio || ativo || organizandoManual;
   const emOrdem = ordenar(pags);
@@ -227,7 +225,11 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
           <Icone n="lapis" className="lapis" />
           <div style={{ flex: 1, minWidth: 0 }}>
             <b>{proc.organizando || organizandoManual ? 'Organizando o resumo…' : `Lendo as páginas: ${prontas} de ${total} prontas`}</b>
-            <div className="pequeno">Tempo restante estimado: <b className="eta">{tempoRestante(proc.organizando ? 90 + pausaRestante : eta)}</b></div>
+            <div className="pequeno">
+              {pausaRestante > 0
+                ? <>As IAs gratuitas pediram uma pausa. Volto a ler em {pausaRestante} s, sozinho.</>
+                : <>Tempo restante estimado: <b className="eta">{tempoRestante(proc.organizando ? 90 : eta)}</b></>}
+            </div>
             <div className="progresso"><i style={{ width: `${total ? ((proc.organizando ? total : prontas) / total) * 100 : 0}%` }} /></div>
             <Avisos />
           </div>
