@@ -1,8 +1,8 @@
 // Chamadas à IA com saída estruturada — só modelos abertos (open-weight) em faixas gratuitas.
 // Ordem de tentativa (a próxima entra sozinha quando uma atinge o limite ou falha):
-//   1. Mistral Large 3 (Apache 2.0, lê imagens)       → MISTRAL_API_KEY
-//   2. Gemma 4 31B / 26B pela API do Google (abertos) → GEMINI_API_KEY
-//   3. Modelos gratuitos do OpenRouter                 → OPENROUTER_API_KEY (opcional)
+//   Fotos:  Gemma 4 pela API do Google (GEMINI_API_KEY) → Gemma 4 / Nemotron VL pelo OpenRouter (OPENROUTER_API_KEY)
+//   Textos: Gemma 4 31B / Nemotron 3 Ultra pelo OpenRouter → Gemma 4 pelo Google
+//   (MISTRAL_API_KEY entra na frente se existir — o plano Free da Mistral não libera API hoje.)
 import { REGRAS_TRANSCRICAO, REGRAS_ANEXO, REGRAS_PROVA, REGRAS_REVISOES, REGRAS_AJUSTE } from './regras.js';
 
 export class ErroIA extends Error {}
@@ -11,14 +11,17 @@ class Pular extends Error {} // falha que justifica tentar o próximo provedor
 const lista = (v, padrao) => (v || padrao).split(',').map(x => x.trim()).filter(Boolean);
 
 function provedores(comImagem) {
-  const ps = [];
+  const mistral = [], google = [], openrouter = [];
   if (process.env.MISTRAL_API_KEY) for (const m of lista(process.env.MODELOS_MISTRAL, 'mistral-large-latest'))
-    ps.push({ nome: `Mistral ${m}`, tipo: 'openai', url: 'https://api.mistral.ai/v1/chat/completions', chave: process.env.MISTRAL_API_KEY, model: m, imagemTexto: true });
+    mistral.push({ nome: `Mistral ${m}`, tipo: 'openai', url: 'https://api.mistral.ai/v1/chat/completions', chave: process.env.MISTRAL_API_KEY, model: m, imagemTexto: true });
   if (process.env.GEMINI_API_KEY) for (const m of lista(process.env.MODELOS_GEMMA, 'gemma-4-31b-it,gemma-4-26b-a4b-it'))
-    ps.push({ nome: `Google ${m}`, tipo: 'gemini', chave: process.env.GEMINI_API_KEY, model: m });
-  if (process.env.OPENROUTER_API_KEY) for (const m of lista(process.env.MODELOS_OPENROUTER, comImagem ? 'google/gemma-4-31b-it:free' : 'openai/gpt-oss-120b:free,google/gemma-4-31b-it:free'))
-    ps.push({ nome: `OpenRouter ${m}`, tipo: 'openai', url: 'https://openrouter.ai/api/v1/chat/completions', chave: process.env.OPENROUTER_API_KEY, model: m });
-  return ps;
+    google.push({ nome: `Google ${m}`, tipo: 'gemini', chave: process.env.GEMINI_API_KEY, model: m });
+  if (process.env.OPENROUTER_API_KEY) for (const m of lista(comImagem ? process.env.MODELOS_OPENROUTER_FOTOS : process.env.MODELOS_OPENROUTER,
+    comImagem ? 'google/gemma-4-31b-it:free,nvidia/nemotron-3.5-super-vl:free' : 'google/gemma-4-31b-it:free,nvidia/nemotron-3-ultra-550b-a55b:free,google/gemma-4-26b-a4b-it:free'))
+    openrouter.push({ nome: `OpenRouter ${m}`, tipo: 'openai', url: 'https://openrouter.ai/api/v1/chat/completions', chave: process.env.OPENROUTER_API_KEY, model: m });
+  // Fotos: o Google aguenta muitos pedidos por dia. Textos grandes (prova, revisões): o Google tem limite
+  // baixo de tokens por minuto, então o OpenRouter vem antes.
+  return comImagem ? [...mistral, ...google, ...openrouter] : [...mistral, ...openrouter, ...google];
 }
 
 function extrairJSON(txt) {
@@ -92,7 +95,7 @@ async function chamarGemini(p, { system, content, tool, maxTokens }) {
 
 async function chamarIA({ system, content, tool, maxTokens = 16000 }) {
   const ps = provedores(content.some(c => c.type === 'image'));
-  if (!ps.length) throw new ErroIA('A chave da IA ainda não foi configurada. Coloque MISTRAL_API_KEY (ou GEMINI_API_KEY) nas variáveis da Vercel.');
+  if (!ps.length) throw new ErroIA('A chave da IA ainda não foi configurada. Coloque GEMINI_API_KEY e OPENROUTER_API_KEY nas variáveis da Vercel.');
   const falhas = [];
   for (const p of ps) {
     try {
