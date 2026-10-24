@@ -30,7 +30,7 @@ export default async function Mais({ searchParams }) {
         </form>
       )}
 
-      <h2>Como funciona</h2>
+      <h2 className="faixa">Como funciona</h2>
       <ol className="pequeno" style={{ paddingLeft: 20 }}>
         <li><b>Mandar apostila:</b> escolha turma e matéria e mande as fotos ou prints das páginas. O sistema lê tudo, monta um resumo fiel e aponta os erros da apostila.</li>
         <li><b>Nova prova:</b> escolha o conteúdo que cai. O sistema monta a prova no modelo do Pirralho, com tom lúdico, gabarito separado e conferência automática.</li>
@@ -38,14 +38,14 @@ export default async function Mais({ searchParams }) {
         <li>Os arquivos saem em <b>.doc</b>, que abre no Word antigo.</li>
       </ol>
 
-      <h2>Preferências fixas</h2>
+      <h2 className="faixa">Preferências fixas</h2>
       <p className="suave pequeno">O que você escrever aqui vale para todas as provas e revisões. O sistema já sabe o modelo do Pirralho: escreva só o que quiser mudar ou reforçar.</p>
       <form action={salvarPreferencias}>
         <label className="campo"><span className="sr">Preferências</span><textarea name="regras_extras" defaultValue={cfg?.regras_extras || ''} placeholder="Ex.: Sempre colocar uma questão de cruzadinha. Evitar questões de verdadeiro ou falso." /></label>
         <button className="botao pequeno">Salvar preferências</button>
       </form>
 
-      <h2>Matérias</h2>
+      <h2 className="faixa">Matérias</h2>
       <p>{materias.map(m => <span key={m.id} className="etq" style={{ '--c': cor(m.cor), marginRight: 6 }}>{m.nome}</span>)}</p>
       <details className="dobra"><summary>Adicionar matéria</summary>
         <form action={criarMateria}>
@@ -55,11 +55,11 @@ export default async function Mais({ searchParams }) {
         </form>
       </details>
 
-      <h2>Arquivos guardados</h2>
+      <h2 className="faixa">Arquivos guardados</h2>
       {materiais?.length > 0 && <ul className="lista">{materiais.map(m => <li key={m.id}><a className="item-link" style={{ minHeight: 52, padding: '10px 2px' }} href={`/api/materiais/${m.id}`}><Icone n="baixar" style={{ width: 22, flex: 'none' }} /><div><div>{m.titulo}</div><div className="sub">{[m.turmas?.nome, m.materias?.nome].filter(Boolean).join(' · ')}</div></div></a></li>)}</ul>}
       <details className="dobra"><summary>Guardar um arquivo</summary><GuardarArquivo turmas={turmas || []} materias={materias || []} /></details>
 
-      <h2>Minha conta</h2>
+      <h2 className="faixa">Minha conta</h2>
       <p className="suave pequeno">Entrou como {user.email}</p>
       {sp.senha === 'ok' && <p className="aviso ok">Senha trocada!</p>}
       {sp.senha === 'curta' && <p className="aviso erro">A senha precisa ter pelo menos 6 letras ou números.</p>}
