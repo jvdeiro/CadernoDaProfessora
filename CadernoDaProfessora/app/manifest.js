@@ -5,8 +5,8 @@ export default function manifest() {
     description: 'Turmas, conteúdos, aulas, provas e revisões.',
     start_url: '/',
     display: 'standalone',
-    background_color: '#f6f4ec',
-    theme_color: '#f6f4ec',
+    background_color: '#f7f6ee',
+    theme_color: '#f7f6ee',
     lang: 'pt-BR',
     icons: [
       { src: '/icon', sizes: '512x512', type: 'image/png' },

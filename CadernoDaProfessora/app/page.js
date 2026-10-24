@@ -17,18 +17,18 @@ export default async function Inicio() {
   const nome = membro.nome || 'Professora';
   return (
     <>
-      <p className="suave pequeno" style={{ margin: 0, textTransform: 'capitalize' }}>{dataLonga(hoje)}</p>
-      <h1>Olá, <span className="hl verde">{nome}</span>!</h1>
-      <p className="suave">O que vamos preparar hoje?</p>
+      <p className="eyebrow">{dataLonga(hoje)}</p>
+      <h1>Olá, <span className="hl">{nome}</span>!</h1>
+      <p className="nota">O que vamos preparar hoje?</p>
 
       <div className="grade-acoes">
-        <Link href="/avaliacoes/nova" className="acao" style={{ '--c': 'var(--verde)' }}><Icone n="provas" className="ic" /><b>Nova prova</b><span>Prova, gabarito e revisões</span></Link>
-        <Link href="/conteudos/novo" className="acao" style={{ '--c': 'var(--pessego)' }}><Icone n="camera" className="ic" /><b>Mandar apostila</b><span>Fotos ou prints das páginas</span></Link>
-        <Link href="/aulas?nova=1" className="acao" style={{ '--c': 'var(--lilas)' }}><Icone n="calendario" className="ic" /><b>Planejar aula</b><span>Data, tema e anotações</span></Link>
-        <Link href="/turmas" className="acao" style={{ '--c': 'var(--amarelo)' }}><Icone n="turmas" className="ic" /><b>Minhas turmas</b><span>Conteúdos e materiais</span></Link>
+        <Link href="/avaliacoes/nova" className="acao dupla" style={{ '--c': 'var(--verde)' }}><small>Avaliação</small><Icone n="provas" className="ic" /><b>Nova prova</b><span>Prova, gabarito e revisões</span></Link>
+        <Link href="/conteudos/novo" className="acao" style={{ '--c': 'var(--pessego)' }}><small>Conteúdo</small><Icone n="camera" className="ic" /><b>Mandar apostila</b><span>Fotos ou prints das páginas</span></Link>
+        <Link href="/aulas?nova=1" className="acao" style={{ '--c': 'var(--lilas)' }}><small>Agenda</small><Icone n="calendario" className="ic" /><b>Planejar aula</b><span>Data, tema e anotações</span></Link>
+        <Link href="/turmas" className="acao" style={{ '--c': 'var(--papel-claro)' }}><small>Turmas</small><Icone n="turmas" className="ic" /><b>Minhas turmas</b><span>Conteúdos e materiais</span></Link>
       </div>
 
-      <h2>Provas em andamento</h2>
+      <h2 className="faixa">Provas em andamento</h2>
       {provas?.length ? (
         <ul className="lista">
           {provas.map(p => (
@@ -37,7 +37,7 @@ export default async function Inicio() {
         </ul>
       ) : <Vazio titulo="Nenhuma prova em andamento">Toque em “Nova prova” para começar.</Vazio>}
 
-      <h2>Próximas aulas</h2>
+      <h2 className="faixa">Próximas aulas</h2>
       {aulas?.length ? (
         <ul className="lista">
           {aulas.map(a => (
@@ -46,7 +46,7 @@ export default async function Inicio() {
         </ul>
       ) : <Vazio titulo="Nenhuma aula marcada">Use “Planejar aula” para anotar as próximas.</Vazio>}
 
-      <h2>Turmas</h2>
+      <h2 className="faixa">Turmas</h2>
       <ul className="lista">
         {(turmas || []).map(t => <ItemLink key={t.id} href={`/turmas/${t.id}`} titulo={<span className={`hl ${t.cor}`}>{t.nome}</span>} />)}
       </ul>
