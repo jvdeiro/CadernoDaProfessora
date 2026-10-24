@@ -18,10 +18,10 @@ export default async function Aulas({ searchParams }) {
   const proximas = (aulas || []).filter(a => !a.data || a.data >= hoje);
   const passadas = (aulas || []).filter(a => a.data && a.data < hoje).reverse();
   const Cartao = ({ a }) => (
-    <li style={{ padding: '14px 2px' }}>
+    <li style={{ padding: '14px 16px' }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
         <form action={marcarAula}><input type="hidden" name="id" value={a.id} /><input type="hidden" name="feita" value={a.feita ? '0' : '1'} />
-          <button aria-label={a.feita ? 'Marcar como não dada' : 'Marcar como dada'} style={{ width: 30, height: 30, borderRadius: 8, border: '2px solid var(--tinta)', background: a.feita ? 'var(--verde)' : '#fffdf7', fontWeight: 700, marginTop: 2 }}>{a.feita ? '✓' : ''}</button></form>
+          <button aria-label={a.feita ? 'Marcar como não dada' : 'Marcar como dada'} style={{ width: 30, height: 30, borderRadius: 8, border: '1.4px solid var(--tinta)', background: a.feita ? 'var(--verde)' : 'var(--papel-2)', fontWeight: 700, marginTop: 2 }}>{a.feita ? '✓' : ''}</button></form>
         <a href={`/aulas?editar=${a.id}`} style={{ textDecoration: 'none', flex: 1, minWidth: 0 }}>
           <div className="mao" style={{ fontSize: '1.3rem', textDecoration: a.feita ? 'line-through' : 'none' }}>{a.tema || 'Aula'}</div>
           <div className="pequeno suave">{dataBR(a.data)} · {a.turmas?.nome} {a.materias && <span className="etq" style={{ '--c': cor(a.materias.cor) }}>{a.materias.nome}</span>}</div>
