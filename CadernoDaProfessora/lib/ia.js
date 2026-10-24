@@ -41,9 +41,16 @@ async function comTempo(url, opts, ms = 280000) {
   finally { clearTimeout(t); }
 }
 
-async function checar(res) {
+class Esperar extends Error { constructor(seg) { super('limite por minuto'); this.seg = seg; } }
+const dormir = ms => new Promise(r => setTimeout(r, ms));
+
+async function checar(res, p) {
   if (res.ok) return;
-  const txt = (await res.text()).slice(0, 300);
+  const txt = (await res.text()).slice(0, 2000);
+  if (res.status === 429 && p?.tipo === 'gemini') { // limite por minuto do Google: vale esperar um pouco
+    const s = Number((txt.match(/"retryDelay":\s*"(\d+)/) || [])[1] || 20);
+    if (s <= 45) throw new Esperar(s);
+  }
   if ([408, 409, 413, 422, 429, 500, 502, 503, 504, 529].includes(res.status) || res.status === 400 && /token|context|length|too large|quota/i.test(txt)) throw new Pular(`erro ${res.status}`);
   throw new Pular(`erro ${res.status}: ${txt}`);
 }
@@ -85,7 +92,7 @@ async function chamarGemini(p, { system, content, tool, maxTokens }) {
       generationConfig: { maxOutputTokens: Math.max(maxTokens, 16000), temperature: 0.4 },
     }),
   });
-  await checar(res);
+  await checar(res, p);
   const j = await res.json();
   const cand = j.candidates?.[0];
   if (!cand) throw new Pular('sem resposta' + (j.promptFeedback?.blockReason ? ` (${j.promptFeedback.blockReason})` : ''));
@@ -99,7 +106,13 @@ async function chamarIA({ system, content, tool, maxTokens = 16000 }) {
   const falhas = [];
   for (const p of ps) {
     try {
-      const r = p.tipo === 'gemini' ? await chamarGemini(p, { system, content, tool, maxTokens }) : await chamarOpenAI(p, { system, content, tool, maxTokens });
+      let r;
+      if (p.tipo === 'gemini') {
+        for (let t = 0; ; t++) {
+          try { r = await chamarGemini(p, { system, content, tool, maxTokens }); break; }
+          catch (e) { if (!(e instanceof Esperar) || t >= 2) throw e instanceof Esperar ? new Pular('limite por minuto') : e; await dormir((e.seg + 2) * 1000); }
+        }
+      } else r = await chamarOpenAI(p, { system, content, tool, maxTokens });
       const faltando = (tool.input_schema.required || []).filter(k => tool.input_schema.properties[k]?.type === 'array' && !Array.isArray(r?.[k]));
       if (faltando.length) throw new Pular(`resposta sem ${faltando.join(', ')}`);
       return r;
