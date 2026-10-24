@@ -158,3 +158,13 @@ Preencha também:
 
 ${TIPOS_QUESTAO}
 `.trim();
+
+// Só a linha do tipo pedido, em vez do catálogo dos 14. Para escrever UMA questão de tipo
+// conhecido, mandar o catálogo inteiro é quase metade do prompt jogada fora.
+export function regraDoTipo(tipo) {
+  const linha = TIPOS_QUESTAO.split('\n').find(l => l.startsWith(`- "${tipo}"`));
+  return linha ? `Como é o tipo pedido:\n${linha}` : TIPOS_QUESTAO;
+}
+
+// Prompt de uma questão, montado com a regra de UM tipo só.
+export const regrasQuestaoDe = tipo => REGRAS_QUESTAO.replace(TIPOS_QUESTAO, regraDoTipo(tipo));
