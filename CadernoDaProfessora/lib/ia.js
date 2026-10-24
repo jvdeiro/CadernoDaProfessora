@@ -111,8 +111,15 @@ async function chamarGemini(p, { system, content, tool, maxTokens }) {
   const j = await res.json();
   const cand = j.candidates?.[0];
   if (!cand) throw new Pular('sem resposta' + (j.promptFeedback?.blockReason ? ` (${j.promptFeedback.blockReason})` : ''));
-  if (cand.finishReason === 'MAX_TOKENS') throw new Pular('resposta cortada');
-  return extrairJSON((cand.content?.parts || []).filter(x => x.text && !x.thought).map(x => x.text).join(''));
+  const partes = cand.content?.parts || [];
+  const util = partes.filter(x => x.text && !x.thought).map(x => x.text).join('');
+  if (cand.finishReason === 'MAX_TOKENS') {
+    // Diz ONDE os tokens foram parar: em raciocínio interno ou em resposta mesmo.
+    const pensou = partes.filter(x => x.thought).map(x => x.text || '').join('').length;
+    const u = j.usageMetadata || {};
+    throw new Pular(`resposta cortada [texto ${util.length}c, pensamento ${pensou}c, tokens ${u.candidatesTokenCount ?? '?'}/${u.thoughtsTokenCount ?? 0} pensando]`);
+  }
+  return extrairJSON(util);
 }
 
 async function chamarIA({ system, content, tool, maxTokens = 16000, grande = false }) {
@@ -325,7 +332,7 @@ export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas }) {
     + `\n===== A QUESTÃO QUE VOCÊ DEVE ESCREVER AGORA =====\n`
     + lote.map(q => `Questão ${q.n} de ${plano?.questoes?.length || 10}: tipo "${q.tipo}", assunto "${q.assunto}", vale ${q.pontos}.`).join('\n')
     + `\n\nEscreva SÓ essa questão, por inteiro (enunciado, itens, gabarito, pontuacao e respostas_chave). Mantenha exatamente o tipo e a pontuação indicados. Devolva "questoes" com um único item.`;
-  return chamarIA({ system: REGRAS_QUESTAO, tool: TOOL_QUESTOES, maxTokens: 4000, content: [{ type: 'text', text: txt }] });
+  return chamarIA({ system: REGRAS_QUESTAO, tool: TOOL_QUESTOES, maxTokens: 8000, content: [{ type: 'text', text: txt }] });
 }
 
 export async function planejarRevisoes(ctx, { mapa, prova, proibidos }) {
