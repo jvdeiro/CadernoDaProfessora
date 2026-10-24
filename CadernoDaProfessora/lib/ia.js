@@ -41,10 +41,10 @@ export function definirPrazo(ms) { prazoRodada = ms || 0; }
 const restaDoPrazo = () => (prazoRodada ? prazoRodada - Date.now() : Infinity);
 
 let faltamProvedores = 1, primeiroProvedor = true;
-async function comTempo(url, opts, ms = 90000) { // no máximo 1,5 min por IA, e sempre dentro da rodada
-  // O primeiro provedor é o que mais costuma responder: dá metade do tempo da rodada a ele.
-  // Os seguintes dividem o que sobrar, para todos ainda caberem na mesma rodada.
-  const fatia = primeiroProvedor ? restaDoPrazo() / 2 : restaDoPrazo() / Math.max(1, faltamProvedores);
+async function comTempo(url, opts, ms = 160000) { // teto por IA, sempre dentro da rodada
+  // O primeiro provedor é o que costuma responder; os que recusam na hora (429) não gastam tempo,
+  // então sobra rodada sem uso. Dá 60% dela ao primeiro e divide o resto entre os seguintes.
+  const fatia = primeiroProvedor ? restaDoPrazo() * 0.6 : restaDoPrazo() / Math.max(1, faltamProvedores);
   const limite = Math.min(ms, Math.max(25000, fatia));
   if (limite < 5000) throw new Pular('sem tempo nesta rodada');
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), limite);
