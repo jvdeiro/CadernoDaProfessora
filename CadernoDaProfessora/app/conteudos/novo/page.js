@@ -15,7 +15,7 @@ export default async function NovoConteudo({ searchParams }) {
     <>
       <Voltar href={sp.turma ? `/turmas/${sp.turma}` : '/'} />
       <h1>Mandar <span className="hl pessego">apostila</span></h1>
-      <p className="suave">Primeiro diga de que turma e matéria é o material. Na próxima tela você manda as fotos ou os prints das páginas.</p>
+      <p className="dek">Primeiro diga de que turma e matéria é o material. Na próxima tela você manda as fotos ou os prints das páginas.</p>
       <form action={criarConteudo}>
         <div className="campo"><span>Turma</span><div className="escolhas">{turmas.map((t, i) => (
           <label key={t.id} className="escolha" style={{ '--c': cor(t.cor) }}><input type="radio" name="turma_id" value={t.id} required defaultChecked={sp.turma ? sp.turma === t.id : i === 0} /><span>{t.nome}</span></label>))}</div></div>
