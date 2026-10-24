@@ -1,5 +1,5 @@
 // Leitura de uma foto e organização do resumo — usadas pelo robô (/api/fila) e pelas rotas manuais.
-import { transcreverPagina, revisarMaterial } from './ia.js';
+import { transcreverPagina, revisarMaterial, definirPrazo } from './ia.js';
 import { semAcento } from './texto.js';
 import { blocosResumo, partesResumo, paginasFaltando } from './resumo.js';
 
@@ -53,13 +53,23 @@ export async function organizarConteudo(sb, id, { prazo = Date.now() + 150000 } 
   };
   await salvar();
 
-  for (let i = 0; i < partes.length; i++) {
-    if (org.feitas[i]) continue;
-    if (Date.now() > prazo) return { pendente: true, feitas: await salvar(), total: partes.length };
-    const r = await revisarMaterial({ resumo: partes[i].texto, turma: c.turmas?.nome, materia: c.materias?.nome, descricao: c.descricao, parte: { n: i + 1, total: partes.length, paginas: partes[i].paginas } });
-    org = { ...org, feitas: Object.assign([], org.feitas, { [i]: r }) };
-    await salvar(); // parte guardada: se cair agora, recomeça da próxima
-  }
+  definirPrazo(prazo); // nenhuma chamada de IA passa do prazo desta rodada
+  try {
+    for (let i = 0; i < partes.length; i++) {
+      if (org.feitas[i]) continue;
+      if (Date.now() > prazo - 15000) return { pendente: true, feitas: await salvar(), total: partes.length };
+      let r;
+      try {
+        r = await revisarMaterial({ resumo: partes[i].texto, turma: c.turmas?.nome, materia: c.materias?.nome, descricao: c.descricao, parte: { n: i + 1, total: partes.length, paginas: partes[i].paginas } });
+      } catch (e) {
+        // Sem tempo nesta rodada não é falha: o que já ficou pronto está salvo e a próxima rodada segue daqui.
+        if (e.semTempo) return { pendente: true, feitas: await salvar(), total: partes.length };
+        throw e;
+      }
+      org = { ...org, feitas: Object.assign([], org.feitas, { [i]: r }) };
+      await salvar(); // parte guardada: se cair agora, recomeça da próxima
+    }
+  } finally { definirPrazo(0); }
 
   // Junta as partes (sem IA)
   const rs = partes.map((_, i) => org.feitas[i]);

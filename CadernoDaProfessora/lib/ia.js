@@ -34,8 +34,15 @@ function extrairJSON(txt) {
 
 const instrucaoJSON = tool => `\n\nResponda SOMENTE com um único objeto JSON válido (sem texto antes ou depois, sem \`\`\`) que siga exatamente este esquema JSON:\n${JSON.stringify(tool.input_schema)}`;
 
-async function comTempo(url, opts, ms = 150000) { // 2,5 min por IA: cabe na rodada do servidor
-  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
+// Prazo da rodada: nenhuma chamada passa dele. Fica aqui para não ter de atravessar todas as funções.
+let prazoRodada = 0;
+export function definirPrazo(ms) { prazoRodada = ms || 0; }
+const restaDoPrazo = () => (prazoRodada ? prazoRodada - Date.now() : Infinity);
+
+async function comTempo(url, opts, ms = 90000) { // 1,5 min por IA, ou o que sobrar da rodada
+  const limite = Math.min(ms, restaDoPrazo());
+  if (limite < 5000) throw new Pular('sem tempo nesta rodada');
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), limite);
   try { return await fetch(url, { ...opts, signal: ctl.signal }); }
   catch (e) { throw new Pular(e.name === 'AbortError' ? 'demorou demais' : 'sem conexão'); }
   finally { clearTimeout(t); }
@@ -105,6 +112,7 @@ async function chamarIA({ system, content, tool, maxTokens = 16000 }) {
   if (!ps.length) throw new ErroIA('A chave da IA ainda não foi configurada. Coloque GEMINI_API_KEY e OPENROUTER_API_KEY nas variáveis da Vercel.');
   const falhas = [];
   for (const p of ps) {
+    if (restaDoPrazo() < 8000) { falhas.push('tempo da rodada esgotado'); break; }
     try {
       let r;
       if (p.tipo === 'gemini') {
@@ -122,6 +130,8 @@ async function chamarIA({ system, content, tool, maxTokens = 16000 }) {
       console.warn('[ia]', p.nome, e.message);
     }
   }
+  // Acabou o tempo da rodada (não é limite de IA): quem chamou retoma na próxima.
+  if (restaDoPrazo() < 8000) { const e = new ErroIA('Sem tempo nesta rodada; continua na próxima.'); e.semTempo = true; e.temporario = true; throw e; }
   const erro = new ErroIA('Todas as IAs gratuitas estão no limite ou fora do ar agora. Detalhe: ' + falhas.join(' · '));
   erro.temporario = true;
   throw erro;

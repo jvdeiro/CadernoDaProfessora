@@ -53,7 +53,7 @@ export async function POST(req) {
         .eq('id', c.id).or(`organizando_em.is.null,organizando_em.lt.${limite}`).select('id');
       if (!travou?.length) continue;
       try {
-        const r = await organizarConteudo(sb, c.id, { prazo: inicio + 130000 });
+        const r = await organizarConteudo(sb, c.id, { prazo: inicio + 250000 });
         if (r.pendente) { // tempo da rodada acabou: as partes prontas ficaram salvas, a próxima rodada continua
           await sb.from('conteudos').update({ organizando_em: null }).eq('id', c.id);
           feitos.push(`organizando ${c.titulo}: parte ${r.feitas} de ${r.total}`);
@@ -68,6 +68,7 @@ export async function POST(req) {
         }, { vapidPrivada: cred.vapid_privada, vapidPublica: cred.vapid_publica });
         feitos.push(`organizou ${c.titulo}`);
       } catch (e) {
+        // Libera a trava de qualquer jeito: trava pendurada faz a apostila parar por 6 minutos.
         await sb.from('conteudos').update({ organizando_em: null, ultimo_erro: `organizar: ${e.message}`.slice(0, 900), ...(e.temporario ? { pausa_ate: daqui(PAUSA_SEM_IA_S) } : { processando: false }) }).eq('id', c.id);
         feitos.push(`organizar ${c.titulo}: ${e.message}`);
       }
