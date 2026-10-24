@@ -34,7 +34,7 @@ function extrairJSON(txt) {
 
 const instrucaoJSON = tool => `\n\nResponda SOMENTE com um único objeto JSON válido (sem texto antes ou depois, sem \`\`\`) que siga exatamente este esquema JSON:\n${JSON.stringify(tool.input_schema)}`;
 
-async function comTempo(url, opts, ms = 280000) {
+async function comTempo(url, opts, ms = 150000) { // 2,5 min por IA: cabe na rodada do servidor
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
   try { return await fetch(url, { ...opts, signal: ctl.signal }); }
   catch (e) { throw new Pular(e.name === 'AbortError' ? 'demorou demais' : 'sem conexão'); }
@@ -219,10 +219,11 @@ export async function transcreverPagina({ imagemBase64, mediaType, turma, materi
   });
 }
 
-export async function revisarMaterial({ resumo, turma, materia, descricao }) {
+export async function revisarMaterial({ resumo, turma, materia, descricao, parte }) {
+  const trecho = parte ? `\nATENÇÃO: este é o trecho ${parte.n} de ${parte.total} do material (páginas ${parte.paginas}). Revise SÓ este trecho: "topicos" só deste trecho e "paginas_faltando" vazio (o sistema calcula).` : '';
   return chamarIA({
     system: REGRAS_ANEXO, tool: TOOL_ANEXO, maxTokens: 8000,
-    content: [{ type: 'text', text: `Turma: ${turma}. Matéria: ${materia}.${descricao ? '\nO que a professora disse sobre este material: ' + descricao : ''}\n\nTRANSCRIÇÃO DAS PÁGINAS:\n\n${resumo}` }],
+    content: [{ type: 'text', text: `Turma: ${turma}. Matéria: ${materia}.${descricao ? '\nO que a professora disse sobre este material: ' + descricao : ''}${trecho}\n\nTRANSCRIÇÃO DAS PÁGINAS:\n\n${resumo}` }],
   });
 }
 

@@ -25,7 +25,7 @@ export async function POST(req) {
 
   const feitos = [];
   // 1) Fotos: uma por vez, enquanto houver tempo nesta rodada
-  while (Date.now() - inicio < 110000) {
+  while (Date.now() - inicio < 60000) {
     const { data: pegou } = await sb.rpc('pegar_pagina');
     const pg = pegou?.[0];
     if (!pg) break;
@@ -40,7 +40,7 @@ export async function POST(req) {
   }
 
   // 2) Apostilas com todas as fotos lidas: organizar o resumo e avisar
-  if (Date.now() - inicio < 60000) {
+  if (Date.now() - inicio < 120000) {
     const { data: ativos } = await sb.from('conteudos').select('id,titulo,pausa_ate,organizando_em').eq('processando', true);
     for (const c of ativos || []) {
       if (c.pausa_ate && new Date(c.pausa_ate) > new Date()) continue;
@@ -52,7 +52,12 @@ export async function POST(req) {
         .eq('id', c.id).or(`organizando_em.is.null,organizando_em.lt.${limite}`).select('id');
       if (!travou?.length) continue;
       try {
-        await organizarConteudo(sb, c.id);
+        const r = await organizarConteudo(sb, c.id, { prazo: inicio + 130000 });
+        if (r.pendente) { // tempo da rodada acabou: as partes prontas ficaram salvas, a próxima rodada continua
+          await sb.from('conteudos').update({ organizando_em: null }).eq('id', c.id);
+          feitos.push(`organizando ${c.titulo}: parte ${r.feitas} de ${r.total}`);
+          break;
+        }
         await sb.from('conteudos').update({ processando: false, organizando_em: null, pausa_ate: null }).eq('id', c.id);
         const { count: comErro } = await sb.from('paginas').select('id', { count: 'exact', head: true }).eq('conteudo_id', c.id).eq('status', 'erro');
         await avisar(sb, {

@@ -18,6 +18,7 @@ async function reduzir(file) {
 }
 const ST = { enviada: 'Na fila', lendo: 'Lendo…', lida: 'Lida', erro: 'Deu erro', fora: 'Fora do assunto' };
 const SEG_POR_FOTO = 35;          // estimativa inicial (leitura + respiro), ajustada pelo ritmo real
+const SEG_POR_PARTE = 90;         // cada parte do resumo conferida pela IA (umas 10 páginas)
 const INTERVALO_S = 15;           // de quanto em quanto tempo a tela confere o andamento
 const ESPERAS_OFFLINE = [10, 20, 30];
 const numeroDe = folhas => (folhas || []).map(x => x.numero).filter(Boolean).join(', ') || null;
@@ -80,7 +81,7 @@ function Selo({ estado, info }) {
 
 export default function Paginas({ conteudoId, iniciais, pronto, processandoInicial }) {
   const [pags, setPags] = useState(iniciais);
-  const [proc, setProc] = useState({ processando: processandoInicial, pausaAte: null, organizando: false });
+  const [proc, setProc] = useState({ processando: processandoInicial, pausaAte: null, organizando: false, prog: null });
   const [envio, setEnvio] = useState(null); // { f, t } enquanto sobe as fotos
   const [erro, setErro] = useState('');
   const [sinc, setSinc] = useState({ estado: 'ok', ultima: Date.now(), falhas: 0, desde: null, proxima: 0 });
@@ -105,21 +106,29 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
   }, [prontas]);
   const segFoto = ritmo.current.segs.length ? ritmo.current.segs.reduce((a, b) => a + b, 0) / ritmo.current.segs.length : SEG_POR_FOTO;
   const pausaRestante = proc.pausaAte ? Math.max(0, Math.round((new Date(proc.pausaAte).getTime() - agora) / 1000)) : 0;
-  const eta = faltam * segFoto + pausaRestante + 90; // + organizar o resumo
+  const partesEstimadas = Math.max(1, Math.ceil(total / 10));
+  const organizando = ativo && faltam === 0;            // fotos prontas: etapa de organizar o resumo
+  const prog = proc.prog;                                // { feitas, total } das partes do resumo
+  const partesFaltando = prog ? Math.max(0, prog.total - prog.feitas) : partesEstimadas;
+  const eta = organizando ? partesFaltando * SEG_POR_PARTE + pausaRestante
+    : faltam * segFoto + pausaRestante + partesEstimadas * SEG_POR_PARTE;
 
   const atualizar = useCallback(async () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) throw new Error('offline');
+    const t0 = Date.now();
     setSinc(s => ({ ...s, estado: 'atualizando' }));
     const [{ data: ps, error: e1 }, { data: c, error: e2 }] = await Promise.all([
       sb.from('paginas').select('id,status,erro,lendo_em,folhas:transcricao->paginas,origem:transcricao->>origem').eq('conteudo_id', conteudoId),
-      sb.from('conteudos').select('processando,status,pausa_ate,organizando_em').eq('id', conteudoId).single(),
+      sb.from('conteudos').select('processando,status,pausa_ate,organizando_em,prog:info->organizacao_progresso').eq('id', conteudoId).single(),
     ]);
     if (e1 || e2) throw new Error('falha');
     setPags(atual => atual.map(p => { const d = ps.find(x => x.id === p.id); return d ? { ...p, status: d.status, erro: d.erro, origem: d.origem || p.origem, numero: numeroDe(d.folhas) || p.numero } : p; }));
     setProc(antes => {
       if (antes.processando && !c.processando) setTimeout(() => router.refresh(), 300); // terminou: mostra o resumo
-      return { processando: c.processando, pausaAte: c.pausa_ate, organizando: !!c.organizando_em };
+      return { processando: c.processando, pausaAte: c.pausa_ate, organizando: !!c.organizando_em, prog: c.prog || null };
     });
+    const resto = 3000 - (Date.now() - t0); // a cobrinha gira pelo menos ~3 s, para dar para ver
+    if (resto > 0) await new Promise(r => setTimeout(r, resto));
     setSinc({ estado: 'ok', ultima: Date.now(), falhas: 0, desde: null, proxima: 0 });
   }, [conteudoId]);
 
@@ -224,13 +233,9 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
         <div className="carregando acompanhamento" role="status" aria-live="polite">
           <Icone n="lapis" className="lapis" />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <b>{proc.organizando || organizandoManual ? 'Organizando o resumo…' : `Lendo as páginas: ${prontas} de ${total} prontas`}</b>
-            <div className="pequeno">
-              {pausaRestante > 0
-                ? <>As IAs gratuitas pediram uma pausa. Volto a ler em {pausaRestante} s, sozinho.</>
-                : <>Tempo restante estimado: <b className="eta">{tempoRestante(proc.organizando ? 90 : eta)}</b></>}
-            </div>
-            <div className="progresso"><i style={{ width: `${total ? ((proc.organizando ? total : prontas) / total) * 100 : 0}%` }} /></div>
+            <b>{organizando || organizandoManual ? (prog ? `Organizando o resumo: parte ${Math.min(prog.feitas + 1, prog.total)} de ${prog.total}` : 'Organizando o resumo…') : `Lendo as páginas: ${prontas} de ${total} prontas`}</b>
+            <div className="pequeno">Tempo restante estimado: <b className="eta">{tempoRestante(eta)}</b></div>
+            <div className="progresso"><i style={{ width: `${organizando ? (prog ? (prog.feitas / prog.total) * 100 : 3) : (total ? (prontas / total) * 100 : 0)}%` }} /></div>
             <Avisos />
           </div>
           {ativo && <Selo estado={sinc.estado} info={info} />}
