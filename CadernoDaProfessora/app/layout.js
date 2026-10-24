@@ -3,6 +3,7 @@ import './globals.css';
 import Nav from '@/components/Nav';
 import RegistrarSW from '@/components/RegistrarSW';
 import Topo from '@/components/Topo';
+import Versao from '@/components/Versao';
 
 const mao = Caveat({ weight: ['400', '700'], subsets: ['latin', 'latin-ext'], variable: '--font-mao', display: 'swap' });
 const texto = DM_Sans({ subsets: ['latin', 'latin-ext'], variable: '--font-texto', display: 'swap' });
@@ -21,6 +22,7 @@ export default function RootLayout({ children }) {
         <Topo />
         <div className="app">
           <main className="folha">{children}</main>
+          <Versao />
         </div>
         <Nav />
         <RegistrarSW />

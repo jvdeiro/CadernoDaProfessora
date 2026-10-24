@@ -324,3 +324,8 @@ details.dobra > summary .etq { margin-left: 4px; }
 .foto .carimbo { font-style: normal; display: inline-block; margin-right: 4px; color: var(--ok); animation: carimbo .4s ease-out; }
 @keyframes carimbo { from { transform: scale(1.8) rotate(-12deg); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .cobrinha, .foto.st-lendo::after, .foto .carimbo, .selo.ok svg { animation: none; } }
+
+/* ---------- versão no rodapé ---------- */
+.versao { text-align: center; font-size: .78rem; color: var(--suave-2); margin: 18px 0 6px; letter-spacing: .02em; }
+.versao b { font-weight: 600; font-family: var(--f-texto); }
+@media print { .versao { display: none; } }
