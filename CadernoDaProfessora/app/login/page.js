@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import Personagem from '@/components/Personagem';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -16,11 +17,12 @@ export default function Login() {
     else window.location.href = '/';
   }
   return (
-    <div style={{ paddingTop: '8vh' }}>
-      <p className="suave pequeno" style={{ margin: 0 }}>CED Proativo · Escola Pirralho</p>
-      <h1>Caderno da <span className="hl verde">Professora</span></h1>
-      <p className="suave">Turmas, conteúdos, aulas, provas e revisões, tudo num lugar só.</p>
-      <form onSubmit={entrar} className="cartao fita" style={{ marginTop: 28, padding: '26px 18px 18px' }}>
+    <div style={{ paddingTop: '2vh' }}>
+      <p className="eyebrow">Entrar</p>
+      <h1>Bem-vinda ao <span className="hl verde">seu caderno</span></h1>
+      <p className="dek">Turmas, conteúdos, aulas, provas e revisões, tudo num lugar só.</p>
+      <Personagem falas={['Que bom ter', 'você aqui!']} />
+      <form onSubmit={entrar} className="cartao fita" style={{ padding: '26px 20px 20px' }}>
         <label className="campo"><span>Seu e-mail</span>
           <input type="email" inputMode="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} />
         </label>
