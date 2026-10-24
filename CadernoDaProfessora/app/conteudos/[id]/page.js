@@ -17,7 +17,7 @@ export default async function Conteudo({ params }) {
   const { data: urls } = paths.length ? await sb.storage.from('paginas').createSignedUrls(paths, 3600) : { data: [] };
   const lista = (pags || []).map((p, i) => ({
     id: p.id, status: p.status, erro: p.erro, lendoEm: p.lendo_em, url: urls?.[i]?.signedUrl,
-    numero: p.transcricao?.paginas?.map(x => x.numero).filter(Boolean).join(', ') || null,
+    numero: p.transcricao?.paginas?.map(x => x.numero).filter(Boolean).join(', ') || null, origem: p.transcricao?.origem || null,
   }));
   const info = c.info || {};
   return (
@@ -27,7 +27,7 @@ export default async function Conteudo({ params }) {
       <h1>{c.titulo}</h1>
       {c.descricao && <p className="dek">{c.descricao}</p>}
 
-      <Paginas conteudoId={c.id} iniciais={lista} pronto={c.status === 'pronto'} />
+      <Paginas conteudoId={c.id} iniciais={lista} pronto={c.status === 'pronto'} processandoInicial={!!c.processando} />
 
       {c.resumo_md && (
         <>

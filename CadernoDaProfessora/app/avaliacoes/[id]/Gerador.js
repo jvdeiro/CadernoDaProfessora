@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Icone from '@/components/Icone';
+import { postPersistente } from '@/lib/persistente';
 
 const TXT = {
   prova: { criar: 'Criar a prova', criando: 'Escrevendo a prova e o gabarito…', corrigindo: 'Conferindo e corrigindo a prova…', refazer: 'Fazer outra prova do zero', ok: 'Conferido: a soma dá 10,0 e nenhuma questão entrega a resposta de outra.', ex: 'Ex.: troque a questão 3 por uma cruzadinha; deixe a prova mais curta; a questão 5 está difícil.' },
@@ -15,12 +16,8 @@ export default function Gerador({ id, tipo, existe, bloqueado, checagem }) {
   const [ajuste, setAjuste] = useState('');
   const router = useRouter();
 
-  async function chamar(body) {
-    const r = await fetch(`/api/avaliacoes/${id}/${tipo}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    let j = {}; try { j = await r.json(); } catch {}
-    if (!r.ok) throw new Error(j.erro || 'Demorou demais ou deu erro. Tente de novo.');
-    return j;
-  }
+  const [espera, setEspera] = useState(0);
+  const chamar = body => postPersistente(`/api/avaliacoes/${id}/${tipo}`, body, { aoEsperar: setEspera });
   async function rodar(body) {
     setErro(''); setFase('criando');
     try {
@@ -35,7 +32,8 @@ export default function Gerador({ id, tipo, existe, bloqueado, checagem }) {
   if (fase) return (
     <div className="carregando" role="status" aria-live="polite">
       <Icone n="lapis" className="lapis" />
-      <div><b>{fase === 'criando' ? t.criando : t.corrigindo}</b><div className="pequeno">Leva de 1 a 3 minutos. Deixe esta tela aberta.</div></div>
+      <div><b>{fase === 'criando' ? t.criando : t.corrigindo}</b><div className="pequeno">Leva de 1 a 3 minutos. Deixe esta tela aberta.</div>
+        {espera > 0 && <div className="pequeno" style={{ marginTop: 6 }}>Todas as IAs gratuitas estão ocupadas agora. Tentando de novo em {espera} s, sozinho.</div>}</div>
     </div>
   );
   return (

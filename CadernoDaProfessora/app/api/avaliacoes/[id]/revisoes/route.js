@@ -26,6 +26,6 @@ export async function POST(req, { params }) {
     await sb.from('avaliacoes').update({ revisoes: rev, checagens, status: 'revisoes_prontas', updated_at: new Date().toISOString() }).eq('id', id);
     return NextResponse.json({ ok: ch.ok, problemas: ch.problemas });
   } catch (e) {
-    return NextResponse.json({ erro: e.message }, { status: 500 });
+    return NextResponse.json({ erro: e.message, esperar: !!e.temporario }, { status: e.temporario ? 503 : 500 });
   }
 }

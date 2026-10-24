@@ -290,3 +290,34 @@ details.dobra > summary .etq { margin-left: 4px; }
 .ficha-prev .resp { display: block; font-size: .84rem; color: var(--ok); }
 
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ---------- acompanhamento da leitura ---------- */
+.acompanhamento { position: relative; padding-right: 58px; }
+.acompanhamento .eta { font: inherit; font-weight: 600; display: inline; margin: 0; }
+.avisado { margin: 12px 0 0; color: var(--tinta-2); }
+.selo-wrap { position: absolute; top: 12px; right: 12px; }
+.selo { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; padding: 0; cursor: pointer; border: 1.4px solid var(--tinta); transition: background .25s; }
+.selo svg { width: 22px; height: 22px; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.selo.atualizando { background: var(--tinta); }
+.selo.atualizando svg { stroke: #fff; }
+.selo.ok { background: var(--verde); }
+.selo.ok svg { stroke: var(--tinta); animation: selo-ok .35s ease-out; }
+.selo.offline { background: var(--pessego); }
+.selo.offline svg { stroke: var(--tinta); }
+.cobrinha { animation: girar .9s linear infinite; }
+.cobrinha circle { stroke-dasharray: 32 18; }
+@keyframes girar { to { transform: rotate(360deg); } }
+@keyframes selo-ok { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.selo-info { position: absolute; right: 0; top: 44px; z-index: 5; width: min(250px, 70vw); padding: 12px 14px; background: var(--papel-2); border: 1.4px solid var(--caneta); border-radius: var(--raio); box-shadow: 4px 6px 0 #303a2b14; font-size: .82rem; line-height: 1.45; color: var(--tinta-2); }
+.selo-info b { display: block; font: 600 .6rem/1.2 var(--f-texto); letter-spacing: .14em; text-transform: uppercase; margin-bottom: 4px; color: var(--tinta); }
+
+/* micro animações das fotos (sutis: acontecem dezenas de vezes por envio) */
+.foto .tirar { position: absolute; top: 3px; right: 3px; width: 30px; height: 30px; border-radius: 50%; border: 0; background: #fcfbf5e6; font-weight: 700; cursor: pointer; }
+.foto.st-lendo::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, #f1ed8566 50%, transparent 70%); background-size: 250% 100%; animation: varrer 2.4s ease-in-out infinite; pointer-events: none; }
+@keyframes varrer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+.foto.st-lendo { border-color: var(--tinta); }
+.foto.st-enviada img { opacity: .78; }
+.foto.st-erro .st, .foto.st-fora .st { background: var(--pessego-t); }
+.foto .carimbo { font-style: normal; display: inline-block; margin-right: 4px; color: var(--ok); animation: carimbo .4s ease-out; }
+@keyframes carimbo { from { transform: scale(1.8) rotate(-12deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .cobrinha, .foto.st-lendo::after, .foto .carimbo, .selo.ok svg { animation: none; } }

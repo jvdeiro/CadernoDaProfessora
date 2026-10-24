@@ -28,6 +28,6 @@ export async function POST(req, { params }) {
     }).eq('id', id);
     return NextResponse.json({ ok: ch.ok, problemas: ch.problemas, avisos: ch.avisos });
   } catch (e) {
-    return NextResponse.json({ erro: e.message }, { status: 500 });
+    return NextResponse.json({ erro: e.message, esperar: !!e.temporario }, { status: e.temporario ? 503 : 500 });
   }
 }
