@@ -9,18 +9,18 @@ export function ItemLink({ href, titulo, sub, etq, etqCor, icone }) {
     <li>
       <Link href={href} className="item-link">
         {icone}
-        <div style={{ minWidth: 0 }}>
-          <div className="tit">{titulo}</div>
+        <div>
+          <div className="tit"><span className="marca-q">{titulo}</span></div>
           {sub && <div className="sub">{sub}</div>}
         </div>
         {etq && <span className="etq" style={{ '--c': etqCor, marginLeft: 'auto' }}>{etq}</span>}
-        <Icone n="seta" className="seta" style={{ width: 20, height: 20, marginLeft: etq ? 6 : 'auto' }} />
+        <span className="seta" aria-hidden="true">→</span>
       </Link>
     </li>
   );
 }
 export function Vazio({ titulo, children }) {
-  return <div className="vazio"><span className="mao">{titulo}</span>{children}</div>;
+  return <div className="vazio"><span className="mao">{titulo}</span>{children && <p>{children}</p>}</div>;
 }
 export function SemAcesso({ email }) {
   return (

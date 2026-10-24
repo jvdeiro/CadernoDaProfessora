@@ -4,15 +4,15 @@ import { usePathname } from 'next/navigation';
 
 export default function Topo() {
   const p = usePathname();
-  if (p.startsWith('/login') || p.includes('/imprimir')) return null;
+  if (p.includes('/imprimir')) return null;
+  const hoje = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }).replace('.', '');
   return (
-    <header className="topbar">
-      <div className="dentro">
-        <Link href="/" className="marca" aria-label="Caderno da Professora, início">
-          <svg viewBox="0 0 44 44" aria-hidden="true"><path d="M12 4q-7 9 1 17t-1 19M23 4q-7 9 1 17t-1 19M34 4q-7 9 1 17t-1 19" /></svg>
-          <span><b>Caderno da Professora</b><small>CED Proativo · Escola Pirralho</small></span>
-        </Link>
-      </div>
+    <header className="mast">
+      <Link href="/" className="logo" aria-label="Caderno da Professora, início">
+        <b>Caderno da Professora</b>
+        <small>CED Proativo · Escola Pirralho</small>
+      </Link>
+      <span className="data" suppressHydrationWarning>{hoje}</span>
     </header>
   );
 }
