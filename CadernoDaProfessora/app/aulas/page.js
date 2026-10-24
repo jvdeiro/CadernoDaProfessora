@@ -46,9 +46,9 @@ export default async function Aulas({ searchParams }) {
         </form>
         {editando && <form action={apagarAula}><input type="hidden" name="id" value={editando.id} /><button className="link-btn" style={{ color: 'var(--perigo)' }}>Apagar esta aula</button></form>}
       </details>
-      <h2>Próximas</h2>
+      <h2 className="faixa">Próximas</h2>
       {proximas.length ? <ul className="lista">{proximas.map(a => <Cartao key={a.id} a={a} />)}</ul> : <Vazio titulo="Nada planejado ainda" />}
-      {passadas.length > 0 && <><h2>Já foram</h2><ul className="lista">{passadas.slice(0, 20).map(a => <Cartao key={a.id} a={a} />)}</ul></>}
+      {passadas.length > 0 && <><h2 className="faixa">Já foram</h2><ul className="lista">{passadas.slice(0, 20).map(a => <Cartao key={a.id} a={a} />)}</ul></>}
     </>
   );
 }
