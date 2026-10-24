@@ -100,7 +100,9 @@ async function chamarGemini(p, { system, content, tool, maxTokens }) {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system + instrucaoJSON(tool) }] },
       contents: [{ role: 'user', parts }],
-      generationConfig: { maxOutputTokens: Math.max(maxTokens, 16000), temperature: 0.4 },
+      // Respeita o maxTokens pedido. Forçar 16000 aqui inflava a reserva de tokens por minuto
+      // do Google (erro "limite por minuto") e deixava a resposta lenta, mesmo em pedidos pequenos.
+      generationConfig: { maxOutputTokens: Math.max(maxTokens, 2000), temperature: 0.4 },
     }),
   });
   await checar(res, p);
