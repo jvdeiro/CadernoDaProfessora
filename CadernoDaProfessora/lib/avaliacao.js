@@ -4,7 +4,7 @@ import { semAcento } from './texto.js';
 export async function carregarAvaliacao(sb, id) {
   const { data: av } = await sb.from('avaliacoes').select('*,turmas(id,nome,ano,idade),materias(id,nome)').eq('id', id).single();
   if (!av) return null;
-  const { data: rel } = await sb.from('avaliacao_conteudos').select('conteudos(id,titulo,resumo_md,anexo_erros_md,status)').eq('avaliacao_id', id);
+  const { data: rel } = await sb.from('avaliacao_conteudos').select('conteudos(id,titulo,resumo_md,anexo_erros_md,status,info)').eq('avaliacao_id', id);
   const conteudos = (rel || []).map(r => r.conteudos).filter(Boolean);
   const { data: cfg } = await sb.from('configuracoes').select('regras_extras').eq('id', 1).single();
   const { data: outras } = await sb.from('avaliacoes').select('nome,historico_resumo,prova,revisoes').eq('turma_id', av.turma_id).eq('materia_id', av.materia_id).neq('id', id);

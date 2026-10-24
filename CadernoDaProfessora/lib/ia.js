@@ -335,6 +335,10 @@ export async function planejarProva(ctx, { mapa }) {
 }
 
 // Um lote de questões: recebe só o trecho das páginas que ele cobre.
+// Texto de uma questão já escrita, curto, para a próxima saber o que já está "à vista" na prova.
+const textoCurto = q => [q.enunciado, q.texto, ...(q.itens || []).map(it => [it.texto, it.antes, it.palavra, it.depois, ...(it.opcoes || [])].filter(Boolean).join(' ')), ...(q.quadro || [])]
+  .filter(Boolean).join(' · ').replace(/\s+/g, ' ').slice(0, 450);
+
 export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas }) {
   // Sem histórico aqui: ele serve para o plano não repetir provas antigas, e repeti-lo em cada
   // questão era mandar todas as provas anteriores dez vezes.
@@ -342,8 +346,8 @@ export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas }) {
     + `\n===== TRECHO DA APOSTILA PARA ESTE LOTE =====\n${trecho}\n`
     // As RESPOSTAS das questões já escritas vão junto: antes iam só os enunciados, e a questão 2
     // pôs no quadro "Primeiro Reinado", que era a resposta da questão 1.
-    + (jaFeitas.length ? `\n===== QUESTÕES JÁ ESCRITAS NESTA PROVA =====\n${jaFeitas.map((q, i) => `${i + 1}. [${q.tipo}] ${q.enunciado} — respostas: ${(q.respostas_chave || []).join(', ') || '—'}`).join('\n')}\n`
-      + `\nNENHUMA dessas respostas pode aparecer na sua questão: nem no enunciado, nem nas opções, nem no quadro de palavras. Não repita assunto nem formato delas.\n` : '')
+    + (jaFeitas.length ? `\n===== QUESTÕES JÁ ESCRITAS NESTA PROVA =====\n${jaFeitas.map((q, i) => `${i + 1}. [${q.tipo}] ${textoCurto(q)} — respostas: ${(q.respostas_chave || []).join(', ') || '—'}`).join('\n')}\n`
+      + `\nNas duas direções: (1) nenhuma dessas respostas pode aparecer na sua questão (enunciado, opções, quadro); (2) a resposta da SUA questão não pode estar escrita nos textos acima. Escolha outro fato da apostila se precisar. Não repita assunto nem formato.\n` : '')
     + `\n===== A QUESTÃO QUE VOCÊ DEVE ESCREVER AGORA =====\n`
     + lote.map(q => `Questão ${q.n} de ${plano?.questoes?.length || 10}: tipo "${q.tipo}", assunto "${q.assunto}", vale ${q.pontos}.`).join('\n')
     + `\n\nEscreva SÓ essa questão, por inteiro (enunciado, itens, gabarito, pontuacao e respostas_chave). Mantenha exatamente o tipo e a pontuação indicados. Devolva "questoes" com um único item.`;

@@ -12,6 +12,15 @@ const n = s => { const m = String(s || '').match(/\d+/); return m ? parseInt(m[0
 const pts = s => parseFloat(String(s ?? '').replace(',', '.')) || 0;
 const fmt = v => v.toFixed(1).replace('.', ',');
 
+// "1,2 · 0,3 cada": refeito a partir dos pontos, para nunca contradizer a soma.
+export function pontuacaoDe(q) {
+  const n = (q.itens || []).length || (q.palavras || []).length;
+  const v = pts(q.pontos);
+  if (n < 2) return fmt(v);
+  const cada = Math.round((v / n) * 100) / 100;
+  return `${fmt(v)} · ${String(cada.toFixed(2)).replace('.', ',').replace(/0$/, '')} cada`;
+}
+
 // A soma TEM que dar 10,0. Se o plano errar por pouco, acerta no código em vez de gastar
 // uma chamada de IA só para corrigir aritmética.
 export function ajustarPontos(questoes) {
@@ -42,18 +51,44 @@ export function fatiarResumo(md) {
 // Mapa de assuntos (leve) que o plano recebe no lugar do resumo inteiro.
 export function mapaAssuntos(conteudos) {
   return conteudos.map(c => {
-    const tops = (c.info?.topicos || []).map(t => `  · ${t.titulo}${t.paginas ? ` (p. ${t.paginas})` : ''}`).join('\n');
+    const tops = (c.info?.topicos || []).map(t => `  · ${String(t.titulo).replace(/^\d+\s+/, '')} — páginas: ${t.paginas || 'sem número'}`).join('\n');
     return `### ${c.titulo}\n${tops || '  (sem tópicos mapeados)'}`;
   }).join('\n\n');
 }
 
 // Só as páginas pedidas. Sem páginas reconhecidas, cai num trecho do começo para não ficar sem contexto.
-export function trechoDe(conteudos, paginas) {
-  const quer = new Set(String(paginas || '').match(/\d+/g)?.map(Number) || []);
+const palavras = s => new Set(String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').match(/[a-z]{4,}/g) || []);
+// "15-19" e "15–17" viram todas as páginas do intervalo (até 15 páginas), não só as pontas.
+const numeros = s => {
+  const out = new Set();
+  for (const m of String(s || '').matchAll(/(\d+)(?:\s*[-–a]\s*(\d+))?/g)) {
+    const de = +m[1], ate = m[2] ? +m[2] : de;
+    if (ate >= de && ate - de <= 15) for (let n = de; n <= ate; n++) out.add(n); else out.add(de);
+  }
+  return out;
+};
+
+// Páginas do tópico do mapa que mais combina com o assunto pedido.
+function paginasDoAssunto(conteudos, assunto) {
+  const alvo = palavras(assunto);
+  let melhor = null, pontos = 0;
+  for (const t of conteudos.flatMap(c => c.info?.topicos || [])) {
+    const n = [...palavras(t.titulo)].filter(w => alvo.has(w)).length;
+    if (n > pontos && t.paginas) { melhor = t.paginas; pontos = n; }
+  }
+  return melhor;
+}
+
+// Só as páginas daquela questão. Antes: o mapa de tópicos nem chegava ao plano, toda questão caía
+// nas "primeiras páginas" e o corte de 3.500 caracteres deixava só a página 52 — a prova inteira
+// saiu de uma página. Agora, sem página reconhecida, usa as do tópico do assunto.
+export function trechoDe(conteudos, paginas, assunto) {
   const todas = conteudos.flatMap(c => fatiarResumo(c.resumo_md));
-  const escolhidas = quer.size ? todas.filter(p => quer.has(p.numero)) : [];
-  const usar = escolhidas.length ? escolhidas : todas.slice(0, 6);
-  return usar.map(p => p.texto).join('\n\n').slice(0, 3500);
+  const existe = new Set(todas.map(p => p.numero));
+  let quer = new Set([...numeros(paginas)].filter(n => existe.has(n)));
+  if (!quer.size && assunto) quer = new Set([...numeros(paginasDoAssunto(conteudos, assunto))].filter(n => existe.has(n)));
+  const escolhidas = quer.size ? todas.filter(p => quer.has(p.numero)) : todas.slice(0, 4);
+  return escolhidas.map(p => p.texto).join('\n\n').slice(0, 14000);
 }
 
 const lotes = (arr, tam) => Array.from({ length: Math.ceil(arr.length / tam) }, (_, i) => arr.slice(i * tam, i * tam + tam));
@@ -145,10 +180,14 @@ export async function gerarProvaEtapas(sb, id, { av, ctx, conteudos, prazo = Dat
     itens: plano => ajustarPontos(plano.questoes || []).map((q, i) => ({ ...q, n: i + 1 })),
     planejar: () => planejarProva(ctx, { mapa }),
     escrever: async (lote, jaFeitas) => {
-      const r = await escreverQuestoes(ctx, { plano: estado.plano, lote, jaFeitas, trecho: trechoDe(conteudos, lote.map(q => q.paginas).join(' ')) });
-      return r.questoes || [];
+      const r = await escreverQuestoes(ctx, { plano: estado.plano, lote, jaFeitas, trecho: trechoDe(conteudos, lote.map(q => q.paginas).join(' '), lote.map(q => q.assunto).join(' ')) });
+      // uma questão por lote, marcada com o número do plano (para a pontuação casar mesmo se algum lote faltar)
+      return (r.questoes || []).slice(0, 1).map(q => ({ ...q, n: lote[0].n }));
     },
-    fechar: async (questoes, plano) => {
+    fechar: async (questoesBrutas, plano) => {
+      const doPlano = ajustarPontos(plano.questoes || []);
+      const questoes = ajustarPontos(questoesBrutas.map(q => ({ ...q, pontos: doPlano[(q.n || 0) - 1]?.pontos || q.pontos })))
+        .map(q => ({ ...q, pontuacao: pontuacaoDe(q) }));
       const prova = {
         titulo: `${av.nome} de ${ctx.materia} – ${ctx.turma}`, abertura: plano.abertura, questoes,
         termos_proibidos: [], fora_da_prova: '',
@@ -176,7 +215,7 @@ export async function gerarRevisoesEtapas(sb, id, { av, ctx, conteudos, prazo = 
     planejar: () => planejarRevisoes(ctx, { mapa, prova: av.prova, proibidos }),
     escrever: async (lote, jaFeitas) => {
       const r = await escreverFichas(ctx, {
-        lote, proibidos, trecho: trechoDe(conteudos, lote.map(f => f.paginas).join(' ')),
+        lote, proibidos, trecho: trechoDe(conteudos, lote.map(f => f.paginas).join(' '), lote.map(f => f.tema).join(' ')),
         jaFeitas: jaFeitas.flatMap(f => (f.perguntas || []).map(p => p.texto)),
       });
       return r.fichas || [];
