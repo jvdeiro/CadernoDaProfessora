@@ -123,7 +123,10 @@ async function chamarIA({ system, content, tool, maxTokens = 16000, grande = fal
       if (p.tipo === 'gemini') {
         for (let t = 0; ; t++) {
           try { r = await chamarGemini(p, { system, content, tool, maxTokens }); break; }
-          catch (e) { if (!(e instanceof Esperar) || t >= 2) throw e instanceof Esperar ? new Pular('limite por minuto') : e; await dormir((e.seg + 2) * 1000); }
+          catch (e) {
+            if (!(e instanceof Esperar) || t >= 2 || restaDoPrazo() < (e.seg + 10) * 1000) throw e instanceof Esperar ? new Pular('limite por minuto') : e;
+            await dormir((e.seg + 2) * 1000);
+          }
         }
       } else r = await chamarOpenAI(p, { system, content, tool, maxTokens });
       const faltando = (tool.input_schema.required || []).filter(k => tool.input_schema.properties[k]?.type === 'array' && !Array.isArray(r?.[k]));
@@ -317,7 +320,7 @@ export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas }) {
     + `\n===== ESCREVA AGORA SÓ ESTAS QUESTÕES =====\n`
     + lote.map(q => `- Questão ${q.n}: tipo "${q.tipo}", assunto "${q.assunto}", vale ${q.pontos}.`).join('\n')
     + `\n\nEscreva cada uma por inteiro (enunciado, itens, gabarito e respostas_chave), seguindo o modelo do Pirralho. Mantenha exatamente o tipo e a pontuação indicados.`;
-  return chamarIA({ system: REGRAS_PROVA, tool: TOOL_QUESTOES, maxTokens: 5000, content: [{ type: 'text', text: txt }] });
+  return chamarIA({ system: REGRAS_PROVA, tool: TOOL_QUESTOES, maxTokens: 3000, content: [{ type: 'text', text: txt }] });
 }
 
 export async function planejarRevisoes(ctx, { mapa, prova, proibidos }) {
@@ -335,7 +338,7 @@ export async function escreverFichas(ctx, { lote, trecho, proibidos, jaFeitas })
     + `\n===== TERMOS PROIBIDOS (nem nas perguntas nem nas respostas) =====\n${proibidos.join(' | ')}\n`
     + (jaFeitas.length ? `\n===== PERGUNTAS JÁ FEITAS (não repetir) =====\n${jaFeitas.join('\n')}\n` : '')
     + `\n===== ESCREVA AGORA SÓ ESTAS FICHAS =====\n${lote.map(f => `- Ficha "${f.tema}" (páginas ${f.paginas || '—'})`).join('\n')}`;
-  return chamarIA({ system: REGRAS_REVISOES, tool: TOOL_FICHAS, maxTokens: 6000, content: [{ type: 'text', text: txt }] });
+  return chamarIA({ system: REGRAS_REVISOES, tool: TOOL_FICHAS, maxTokens: 3000, content: [{ type: 'text', text: txt }] });
 }
 
 export async function gerarProva(ctx, { atual, ajuste } = {}) {

@@ -5,7 +5,8 @@
 import { planejarProva, escreverQuestoes, planejarRevisoes, escreverFichas, definirPrazo } from './ia.js';
 import { checarProva, checarRevisoes, termosProibidos } from './checagens.js';
 
-const POR_LOTE = 2;          // questões (ou fichas) escritas por chamada
+const POR_LOTE = 1;          // UMA questão (ou ficha) por chamada: as IAs gratuitas estouram o tempo
+                             // com pedidos maiores. Mais chamadas, cada uma rápida e que quase sempre passa.
 const MAX_TENTATIVAS = 3;    // um lote teimoso não trava a avaliação inteira
 const n = s => { const m = String(s || '').match(/\d+/); return m ? parseInt(m[0]) : null; };
 const pts = s => parseFloat(String(s ?? '').replace(',', '.')) || 0;
@@ -52,7 +53,7 @@ export function trechoDe(conteudos, paginas) {
   const todas = conteudos.flatMap(c => fatiarResumo(c.resumo_md));
   const escolhidas = quer.size ? todas.filter(p => quer.has(p.numero)) : [];
   const usar = escolhidas.length ? escolhidas : todas.slice(0, 6);
-  return usar.map(p => p.texto).join('\n\n').slice(0, 9000);
+  return usar.map(p => p.texto).join('\n\n').slice(0, 6000);
 }
 
 const lotes = (arr, tam) => Array.from({ length: Math.ceil(arr.length / tam) }, (_, i) => arr.slice(i * tam, i * tam + tam));
@@ -133,7 +134,9 @@ async function emEtapas(sb, id, { prazo, chave, estado, itens, planejar, escreve
 }
 
 export async function gerarProvaEtapas(sb, id, { av, ctx, conteudos, prazo = Date.now() + 240000 }) {
-  const chave = `prova:${conteudos.map(c => c.id).join(',')}:${av.pedidos || ''}`;
+  // POR_LOTE entra na chave: se o tamanho do lote mudar, o progresso salvo não serve mais
+  // (os índices passariam a apontar para outras questões, gerando duplicatas).
+  const chave = `prova:${POR_LOTE}:${conteudos.map(c => c.id).join(',')}:${av.pedidos || ''}`;
   const g = av.geracao?.chave === chave && av.geracao?.tipo === 'prova' ? av.geracao : { tipo: 'prova', lotes: [] };
   const estado = { ...g, tipo: 'prova', lotes: g.lotes || [] };
   const mapa = mapaAssuntos(conteudos);
@@ -162,7 +165,7 @@ export async function gerarProvaEtapas(sb, id, { av, ctx, conteudos, prazo = Dat
 }
 
 export async function gerarRevisoesEtapas(sb, id, { av, ctx, conteudos, prazo = Date.now() + 240000 }) {
-  const chave = `revisoes:${JSON.stringify(av.prova?.resumo_questoes || []).length}`;
+  const chave = `revisoes:${POR_LOTE}:${JSON.stringify(av.prova?.resumo_questoes || []).length}`;
   const g = av.geracao?.chave === chave && av.geracao?.tipo === 'revisoes' ? av.geracao : { tipo: 'revisoes', lotes: [] };
   const estado = { ...g, tipo: 'revisoes', lotes: g.lotes || [] };
   const mapa = mapaAssuntos(conteudos);

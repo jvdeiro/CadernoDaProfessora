@@ -7,8 +7,8 @@ import { createClient } from '@/lib/supabase/client';
 import { postPersistente } from '@/lib/persistente';
 import { Selo, useAtualizacao } from '@/components/Acompanhar';
 
-const SEG_POR_LOTE = 70;   // cada lote: um pedido pequeno à IA
-const LOTES_ESTIMADOS = 5; // 10 questões / 2 por lote, enquanto o plano não chega
+const SEG_POR_LOTE = 45;   // cada lote: um pedido pequeno à IA
+const LOTES_ESTIMADOS = 10; // uma questão por lote, enquanto o plano não chega
 const tempoRestante = seg => seg < 60 ? 'menos de 1 min' : `cerca de ${Math.round(seg / 60)} min`;
 
 const TXT = {
@@ -63,8 +63,8 @@ export default function Gerador({ id, tipo, existe, bloqueado, checagem, process
     const agora = !prog?.temPlano
       ? (ehProva ? 'Escolhendo os assuntos e os tipos das 10 questões' : 'Escolhendo os temas das 8 fichas')
       : prog?.total
-        ? `${ehProva ? 'Escrevendo as questões' : 'Escrevendo as fichas'} — lote ${Math.min(prog.feitas + 1, prog.total)} de ${prog.total}`
-        : (ehProva ? 'Escrevendo as primeiras questões' : 'Escrevendo as primeiras fichas');
+        ? `${ehProva ? 'Escrevendo a questão' : 'Escrevendo a ficha'} ${Math.min(prog.feitas + 1, prog.total)} de ${prog.total}`
+        : (ehProva ? 'Escrevendo a primeira questão' : 'Escrevendo a primeira ficha');
     return (
       <div className="carregando acompanhamento" role="status" aria-live="polite">
         <Icone n="lapis" className="lapis" />
