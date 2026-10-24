@@ -19,7 +19,7 @@ export default async function Nova({ searchParams }) {
     <>
       <Voltar href="/avaliacoes" />
       <h1>Nova <span className="hl verde">prova</span></h1>
-      <p className="suave">Escolha a turma, a matéria e o conteúdo que cai. O sistema monta a prova no modelo do Pirralho, o gabarito e as revisões.</p>
+      <p className="dek">Escolha a turma, a matéria e o conteúdo que cai. O sistema monta a prova no modelo do Pirralho, o gabarito e as revisões.</p>
       <form action={criarAvaliacao}>
         <EscolhaConteudos turmas={turmas} materias={materias} conteudos={conteudos} turmaInicial={sp.turma} />
         <label className="campo"><span>Nome da avaliação</span><input name="nome" placeholder="Ex.: A8" required /></label>
