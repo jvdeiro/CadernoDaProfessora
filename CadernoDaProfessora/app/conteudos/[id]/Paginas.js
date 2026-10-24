@@ -108,6 +108,7 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
 
   const atualizar = useCallback(async () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) throw new Error('offline');
+    const t0 = Date.now();
     setSinc(s => ({ ...s, estado: 'atualizando' }));
     const [{ data: ps, error: e1 }, { data: c, error: e2 }] = await Promise.all([
       sb.from('paginas').select('id,status,erro,lendo_em,folhas:transcricao->paginas,origem:transcricao->>origem').eq('conteudo_id', conteudoId),
@@ -119,6 +120,8 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
       if (antes.processando && !c.processando) setTimeout(() => router.refresh(), 300); // terminou: mostra o resumo
       return { processando: c.processando, pausaAte: c.pausa_ate, organizando: !!c.organizando_em };
     });
+    const resto = 3000 - (Date.now() - t0); // a cobrinha gira pelo menos ~3 s, para dar para ver
+    if (resto > 0) await new Promise(r => setTimeout(r, resto));
     setSinc({ estado: 'ok', ultima: Date.now(), falhas: 0, desde: null, proxima: 0 });
   }, [conteudoId]);
 
