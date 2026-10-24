@@ -56,7 +56,7 @@ export default async function Mais({ searchParams }) {
       </details>
 
       <h2 className="faixa">Arquivos guardados</h2>
-      {materiais?.length > 0 && <ul className="lista">{materiais.map(m => <li key={m.id}><a className="item-link" style={{ minHeight: 52, padding: '10px 2px' }} href={`/api/materiais/${m.id}`}><Icone n="baixar" style={{ width: 22, flex: 'none' }} /><div><div>{m.titulo}</div><div className="sub">{[m.turmas?.nome, m.materias?.nome].filter(Boolean).join(' · ')}</div></div></a></li>)}</ul>}
+      {materiais?.length > 0 && <ul className="lista">{materiais.map(m => <li key={m.id}><a className="item-link" href={`/api/materiais/${m.id}`}><Icone n="baixar" style={{ width: 22, flex: 'none' }} /><div><div>{m.titulo}</div><div className="sub">{[m.turmas?.nome, m.materias?.nome].filter(Boolean).join(' · ')}</div></div></a></li>)}</ul>}
       <details className="dobra"><summary>Guardar um arquivo</summary><GuardarArquivo turmas={turmas || []} materias={materias || []} /></details>
 
       <h2 className="faixa">Minha conta</h2>
