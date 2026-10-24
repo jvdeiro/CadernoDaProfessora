@@ -12,7 +12,7 @@ export default async function Turmas() {
     <>
       <h1>Minhas <span className="hl amarelo">turmas</span></h1>
       <ul className="lista">
-        {(turmas || []).map(t => <ItemLink key={t.id} href={`/turmas/${t.id}`} titulo={<span className={`hl ${t.cor}`}>{t.nome}</span>} sub={t.idade ? `Crianças de ${t.idade} anos` : null} />)}
+        {(turmas || []).map(t => <ItemLink key={t.id} href={`/turmas/${t.id}`} titulo={t.nome} sub={t.idade ? `Crianças de ${t.idade} anos` : null} />)}
       </ul>
       <details className="dobra">
         <summary>Adicionar turma</summary>
