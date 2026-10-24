@@ -27,23 +27,23 @@ export default async function Turma({ params }) {
         <Link className="botao pastel" style={{ '--c': 'var(--pessego)' }} href={`/conteudos/novo?turma=${t.id}`}><Icone n="camera" style={{ width: 20 }} />Mandar apostila</Link>
       </div>
 
-      <h2>Conteúdos <span className="suave pequeno" style={{ fontFamily: 'var(--f-texto)' }}>(apostilas)</span></h2>
+      <h2 className="faixa">Conteúdos <span className="suave pequeno" style={{ fontFamily: 'var(--f-texto)' }}>(apostilas)</span></h2>
       {conteudos?.length ? <ul className="lista">{conteudos.map(c => (
         <ItemLink key={c.id} href={`/conteudos/${c.id}`} titulo={c.titulo} sub={`${c.paginas?.[0]?.count || 0} páginas · ${c.status === 'pronto' ? 'resumo pronto' : 'em preparo'}`} etq={c.materias?.nome} etqCor={cor(c.materias?.cor)} />
       ))}</ul> : <Vazio titulo="Nenhum conteúdo ainda">Mande as fotos da apostila para o sistema ler.</Vazio>}
 
-      <h2>Provas</h2>
+      <h2 className="faixa">Provas</h2>
       {provas?.length ? <ul className="lista">{provas.map(p => (
         <ItemLink key={p.id} href={`/avaliacoes/${p.id}`} titulo={`${p.nome} de ${p.materias?.nome || ''}`} sub={`${p.data ? dataBR(p.data) + ' · ' : ''}${STATUS[p.status]?.t || ''}`} etq={p.materias?.nome} etqCor={cor(p.materias?.cor)} />
       ))}</ul> : <Vazio titulo="Nenhuma prova ainda" />}
 
-      <h2>Aulas</h2>
+      <h2 className="faixa">Aulas</h2>
       {aulas?.length ? <ul className="lista">{aulas.map(a => (
         <ItemLink key={a.id} href={`/aulas?editar=${a.id}`} titulo={a.tema || 'Aula'} sub={dataBR(a.data)} etq={a.materias?.nome} etqCor={cor(a.materias?.cor)} />
       ))}</ul> : <Vazio titulo="Nenhuma aula anotada" />}
 
       {materiais?.length > 0 && <>
-        <h2>Materiais guardados</h2>
+        <h2 className="faixa">Materiais guardados</h2>
         <ul className="lista">{materiais.map(m => (
           <li key={m.id}><a className="item-link" href={`/api/materiais/${m.id}`}><Icone n="baixar" style={{ width: 22 }} /><div><div className="tit" style={{ fontSize: '1.15rem' }}>{m.titulo}</div><div className="sub">{m.materias?.nome}</div></div></a></li>
         ))}</ul>
