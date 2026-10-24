@@ -11,9 +11,12 @@ Regras de criação: `lib/regras.js`. Conferências: `lib/checagens.js`. Gerador
 
 ## Variáveis de ambiente
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `GEMINI_API_KEY` — chave gratuita do Google AI Studio (usada quando existe)
-- ou `ANTHROPIC_API_KEY` — Claude pela API (pago por uso), usado quando não há chave do Gemini
-- Opcionais: `MODELO_PRINCIPAL` (padrão `gemini-3.8-flash` / `claude-opus-5-5`), `MODELO_RAPIDO` (padrão `gemini-3.5-flash-lite` / `claude-sonnet-5-5`)
+
+IA: só modelos abertos (open-weight), em faixas gratuitas. O app tenta na ordem abaixo e passa sozinho para o próximo quando um atinge o limite ou falha:
+- `MISTRAL_API_KEY` — Mistral Large 3 (Apache 2.0, lê fotos). Chave grátis em console.mistral.ai (plano Free).
+- `GEMINI_API_KEY` — Gemma 4 31B e 26B (abertos) pela API do Google. Chave grátis em aistudio.google.com. Bom para ler fotos; prompts muito grandes podem passar do limite por minuto.
+- `OPENROUTER_API_KEY` (opcional) — modelos `:free` do OpenRouter (cerca de 50 pedidos por dia).
+- Opcionais para trocar modelos: `MODELOS_MISTRAL`, `MODELOS_GEMMA`, `MODELOS_OPENROUTER` (listas separadas por vírgula).
 
 ## Acesso
 Só e-mails da tabela `membros` enxergam os dados (RLS). Contas são criadas com a função SQL `criar_usuario(email, senha)`.
