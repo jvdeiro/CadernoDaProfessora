@@ -3,6 +3,8 @@ import { transcreverPagina, revisarMaterial, definirPrazo } from './ia.js';
 import { semAcento } from './texto.js';
 import { blocosResumo, partesResumo, paginasFaltando } from './resumo.js';
 
+const MAX_TENTATIVAS = 3; // depois disso a parte segue sem conferência, para a apostila não ficar presa
+
 // Lê uma foto já marcada como "lendo". Devolve { status, numero }.
 // Se nenhuma IA estiver livre, a foto volta para a fila ("enviada") e o erro sai com .temporario.
 export async function lerPagina(sb, id) {
@@ -45,7 +47,8 @@ export async function organizarConteudo(sb, id, { prazo = Date.now() + 150000 } 
   const partes = partesResumo(blocos);
   const assinatura = `${blocos.length}:${resumo.length}`;
   const info = c.info || {};
-  let org = info.organizacao?.assinatura === assinatura ? info.organizacao : { assinatura, feitas: [] };
+  let org = info.organizacao?.assinatura === assinatura ? info.organizacao : { assinatura, feitas: [], tentativas: [] };
+  org = { ...org, tentativas: org.tentativas || [] };
   const salvar = async extra => {
     const feitas = partes.filter((_, i) => org.feitas[i]).length;
     await sb.from('conteudos').update({ resumo_md: resumo, info: { ...info, organizacao: org, organizacao_progresso: { feitas, total: partes.length } }, ...extra }).eq('id', id);
@@ -64,7 +67,15 @@ export async function organizarConteudo(sb, id, { prazo = Date.now() + 150000 } 
       } catch (e) {
         // Sem tempo nesta rodada não é falha: o que já ficou pronto está salvo e a próxima rodada segue daqui.
         if (e.semTempo) return { pendente: true, feitas: await salvar(), total: partes.length };
-        throw e;
+        // Uma parte teimosa não pode travar a apostila para sempre: depois de algumas tentativas,
+        // ela segue sem a conferência dessas páginas e isso fica registrado no anexo.
+        const t = (org.tentativas[i] || 0) + 1;
+        org = { ...org, tentativas: Object.assign([], org.tentativas, { [i]: t }) };
+        await salvar();
+        if (t < MAX_TENTATIVAS) throw e;
+        org = { ...org, feitas: Object.assign([], org.feitas, { [i]: { pulada: true, paginas: partes[i].paginas } }) };
+        await salvar();
+        continue;
       }
       org = { ...org, feitas: Object.assign([], org.feitas, { [i]: r }) };
       await salvar(); // parte guardada: se cair agora, recomeça da próxima
@@ -72,7 +83,9 @@ export async function organizarConteudo(sb, id, { prazo = Date.now() + 150000 } 
   } finally { definirPrazo(0); }
 
   // Junta as partes (sem IA)
-  const rs = partes.map((_, i) => org.feitas[i]);
+  const todas = partes.map((_, i) => org.feitas[i] || { pulada: true, paginas: partes[i].paginas });
+  const puladas = todas.filter(r => r.pulada).map(r => r.paginas);
+  const rs = todas.filter(r => !r.pulada);
   const topicos = [];
   for (const t of rs.flatMap(r => r.topicos || [])) {
     const ult = topicos[topicos.length - 1];
@@ -86,7 +99,8 @@ export async function organizarConteudo(sb, id, { prazo = Date.now() + 150000 } 
   ];
   const { organizacao, organizacao_progresso, ...resto } = info;
   await sb.from('conteudos').update({
-    resumo_md: resumo, anexo_erros_md: juntar('anexo_erros_md'), status: 'pronto', updated_at: new Date().toISOString(),
+    resumo_md: resumo, status: 'pronto', updated_at: new Date().toISOString(),
+    anexo_erros_md: [juntar('anexo_erros_md'), puladas.length ? `> Páginas ${puladas.join(', ')} entraram no resumo, mas não passaram pela conferência automática (as IAs gratuitas estavam no limite). Vale uma olhada antes de usar.` : ''].filter(Boolean).join('\n\n'),
     info: { ...resto, topicos, paginas_faltando: paginasFaltando(blocos), paginas_fora, destaques_md: juntar('destaques_md') },
   }).eq('id', id);
   return { pronto: true, total: partes.length };
