@@ -63,7 +63,7 @@ export default async function Avaliacao({ params }) {
 
           <li className={`passo ${av.prova ? 'feito' : ''} ${!prontos.length ? 'bloq' : ''}`}>
             <h2>Prova e gabarito</h2>
-            <Gerador id={av.id} tipo="prova" existe={!!av.prova} bloqueado={!prontos.length} checagem={ch.prova} processandoInicial={av.processando === 'prova'} />
+            <Gerador id={av.id} tipo="prova" existe={!!av.prova} bloqueado={!prontos.length} checagem={ch.prova} processandoInicial={av.processando === 'prova'} parouCom={!av.prova && !av.processando && av.ultimo_erro?.startsWith('prova') ? av.ultimo_erro : null} />
             {av.prova && (
               <>
                 <div className="botoes">
@@ -80,7 +80,7 @@ export default async function Avaliacao({ params }) {
             <h2>Revisões</h2>
             <p className="suave pequeno" style={{ marginTop: -6 }}>8 fichas numa folha, “Responda em seu caderno”.</p>
             {ch.revisoes_desatualizadas && av.revisoes && <p className="aviso">A prova mudou depois que as revisões foram feitas. Refaça as revisões para garantir que nada da prova nova aparece nelas.</p>}
-            <Gerador id={av.id} tipo="revisoes" existe={!!av.revisoes} bloqueado={!av.prova} checagem={ch.revisoes} processandoInicial={av.processando === 'revisoes'} />
+            <Gerador id={av.id} tipo="revisoes" existe={!!av.revisoes} bloqueado={!av.prova} checagem={ch.revisoes} processandoInicial={av.processando === 'revisoes'} parouCom={!av.revisoes && !av.processando && av.ultimo_erro?.startsWith('revisoes') ? av.ultimo_erro : null} />
             {av.revisoes && (
               <>
                 <div className="botoes">

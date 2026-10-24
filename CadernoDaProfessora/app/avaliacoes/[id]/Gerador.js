@@ -16,7 +16,7 @@ const TXT = {
   revisoes: { criar: 'Criar as revisões', criando: 'Escrevendo as 8 fichas de revisão…', corrigindo: 'Tirando das fichas o que lembra a prova…', refazer: 'Fazer outras revisões do zero', ok: 'Conferido: nenhuma resposta, alternativa ou palavra-chave da prova aparece nas revisões.', ex: 'Ex.: deixe as perguntas mais curtas; troque a ficha 2 por uma sobre o café.' },
 };
 
-export default function Gerador({ id, tipo, existe, bloqueado, checagem, processandoInicial }) {
+export default function Gerador({ id, tipo, existe, bloqueado, checagem, processandoInicial, parouCom }) {
   const t = TXT[tipo];
   const [fase, setFase] = useState('');
   const [erro, setErro] = useState('');
@@ -93,7 +93,8 @@ export default function Gerador({ id, tipo, existe, bloqueado, checagem, process
   return (
     <div>
       {erro && <p className="aviso erro" role="alert">{erro}</p>}
-      {!existe && <button className="botao cheio" disabled={bloqueado} onClick={() => rodar({})}>{t.criar}</button>}
+      {!existe && parouCom && <p className="aviso" role="status"><b>Da última vez parou no meio.</b> {parouCom.replace(/^(prova|revisoes): /, '')}</p>}
+      {!existe && <button className="botao cheio" disabled={bloqueado} onClick={() => rodar({})}>{parouCom ? 'Continuar de onde parou' : t.criar}</button>}
       {!existe && bloqueado && <p className="suave pequeno" style={{ marginTop: 8 }}>{tipo === 'prova' ? 'Primeiro escolha um conteúdo com o resumo pronto.' : 'Primeiro crie a prova.'}</p>}
       {existe && checagem && (checagem.ok
         ? <p className="aviso ok">✓ {t.ok}</p>
@@ -107,7 +108,7 @@ export default function Gerador({ id, tipo, existe, bloqueado, checagem, process
           </label>
           <div className="botoes">
             <button className="botao" disabled={!ajuste.trim()} onClick={() => rodar({ ajuste })}>Fazer a mudança</button>
-            <button className="botao claro" onClick={() => { if (window.confirm('Fazer tudo de novo do zero?')) rodar({}); }}><Icone n="refazer" style={{ width: 18 }} />{t.refazer}</button>
+            <button className="botao claro" onClick={() => { if (window.confirm('Fazer tudo de novo do zero?')) rodar({ zero: true }); }}><Icone n="refazer" style={{ width: 18 }} />{t.refazer}</button>
           </div>
         </details>
       )}

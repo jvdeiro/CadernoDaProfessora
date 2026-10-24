@@ -16,7 +16,9 @@ export async function POST(req, { params }) {
   if (!conteudos.some(c => c.resumo_md)) return NextResponse.json({ erro: 'Escolha pelo menos um conteúdo com o resumo pronto.' }, { status: 400 });
   if (!body.ajuste && !body.corrigir) {
     // Criar do zero: vai para o robô do servidor, que escreve em etapas e salva cada uma.
-    await sb.from('avaliacoes').update({ processando: 'prova', geracao: null, gerando_em: null, pausa_ate: null, ultimo_erro: null }).eq('id', id);
+    // Retoma o que já foi escrito; só "fazer do zero" apaga. Antes, mandar criar de novo apagava
+    // tudo — e a própria mensagem de erro dizia que ele continuaria de onde parou.
+    await sb.from('avaliacoes').update({ processando: 'prova', gerando_em: null, pausa_ate: null, ultimo_erro: null, ...(body.zero ? { geracao: null } : {}) }).eq('id', id);
     return NextResponse.json({ enfileirado: true });
   }
   let ajuste = body.ajuste;

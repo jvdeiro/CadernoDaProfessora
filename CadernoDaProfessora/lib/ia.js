@@ -91,6 +91,11 @@ async function chamarOpenAI(p, { system, content, tool, maxTokens }) {
 }
 
 // ---------- API do Google (Gemma 4) ----------
+// O Gemma 4 vem com o "pensamento" LIGADO por padrão. Medido aqui: uma questão gastou os 8.000
+// tokens inteiros raciocinando (27 mil caracteres de pensamento, zero de resposta) — era isso o
+// "resposta cortada" e o "demorou demais" da tarde inteira. thinkingLevel MINIMAL desliga
+// (relatos no fórum do Google, abr–mai/2026). Se algum modelo recusar o parâmetro, segue sem ele.
+const semPensamentoRecusado = new Set();
 async function chamarGemini(p, { system, content, tool, maxTokens }) {
   const parts = content.map(c => c.type === 'image'
     ? { inline_data: { mime_type: c.source.media_type, data: c.source.data } }
@@ -103,9 +108,16 @@ async function chamarGemini(p, { system, content, tool, maxTokens }) {
       contents: [{ role: 'user', parts }],
       // Respeita o maxTokens pedido. Forçar 16000 aqui inflava a reserva de tokens por minuto
       // do Google (erro "limite por minuto") e deixava a resposta lenta, mesmo em pedidos pequenos.
-      generationConfig: { maxOutputTokens: Math.max(maxTokens, 2000), temperature: 0.4 },
+      generationConfig: {
+        maxOutputTokens: Math.max(maxTokens, 2000), temperature: 0.4,
+        ...(semPensamentoRecusado.has(p.model) ? {} : { thinkingConfig: { thinkingLevel: 'MINIMAL' } }),
+      },
     }),
   });
+  if (res.status === 400 && !semPensamentoRecusado.has(p.model)) {
+    const txt = await res.clone().text();
+    if (/thinking/i.test(txt)) { semPensamentoRecusado.add(p.model); return chamarGemini(p, { system, content, tool, maxTokens }); }
+  }
   await checar(res, p);
   const j = await res.json();
   const cand = j.candidates?.[0];
