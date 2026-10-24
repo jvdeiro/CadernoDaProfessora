@@ -53,7 +53,7 @@ export function trechoDe(conteudos, paginas) {
   const todas = conteudos.flatMap(c => fatiarResumo(c.resumo_md));
   const escolhidas = quer.size ? todas.filter(p => quer.has(p.numero)) : [];
   const usar = escolhidas.length ? escolhidas : todas.slice(0, 6);
-  return usar.map(p => p.texto).join('\n\n').slice(0, 6000);
+  return usar.map(p => p.texto).join('\n\n').slice(0, 3500);
 }
 
 const lotes = (arr, tam) => Array.from({ length: Math.ceil(arr.length / tam) }, (_, i) => arr.slice(i * tam, i * tam + tam));

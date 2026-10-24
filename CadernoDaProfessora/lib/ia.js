@@ -40,10 +40,12 @@ let prazoRodada = 0;
 export function definirPrazo(ms) { prazoRodada = ms || 0; }
 const restaDoPrazo = () => (prazoRodada ? prazoRodada - Date.now() : Infinity);
 
-let faltamProvedores = 1;
+let faltamProvedores = 1, primeiroProvedor = true;
 async function comTempo(url, opts, ms = 90000) { // no máximo 1,5 min por IA, e sempre dentro da rodada
-  // divide o que resta entre os provedores ainda não tentados: assim todos cabem na mesma rodada
-  const limite = Math.min(ms, Math.max(25000, restaDoPrazo() / Math.max(1, faltamProvedores)));
+  // O primeiro provedor é o que mais costuma responder: dá metade do tempo da rodada a ele.
+  // Os seguintes dividem o que sobrar, para todos ainda caberem na mesma rodada.
+  const fatia = primeiroProvedor ? restaDoPrazo() / 2 : restaDoPrazo() / Math.max(1, faltamProvedores);
+  const limite = Math.min(ms, Math.max(25000, fatia));
   if (limite < 5000) throw new Pular('sem tempo nesta rodada');
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), limite);
   try { return await fetch(url, { ...opts, signal: ctl.signal }); }
@@ -118,8 +120,9 @@ async function chamarIA({ system, content, tool, maxTokens = 16000, grande = fal
   if (!ps.length) throw new ErroIA('A chave da IA ainda não foi configurada. Coloque GEMINI_API_KEY e OPENROUTER_API_KEY nas variáveis da Vercel.');
   const falhas = [];
   for (const [idx, p] of ps.entries()) {
-    faltamProvedores = ps.length - idx;
+    faltamProvedores = ps.length - idx; primeiroProvedor = idx === 0;
     if (restaDoPrazo() < 8000) { falhas.push('tempo da rodada esgotado'); break; }
+    const t0 = Date.now();
     try {
       let r;
       if (p.tipo === 'gemini') {
@@ -136,8 +139,8 @@ async function chamarIA({ system, content, tool, maxTokens = 16000, grande = fal
       return r;
     } catch (e) {
       if (!(e instanceof Pular)) throw e;
-      falhas.push(`${p.nome}: ${e.message}`);
-      console.warn('[ia]', p.nome, e.message);
+      falhas.push(`${p.nome}: ${e.message} (${Math.round((Date.now() - t0) / 1000)}s)`);
+      console.warn('[ia]', p.nome, e.message, Math.round((Date.now() - t0) / 1000) + 's');
     }
   }
   // Acabou o tempo da rodada (não é limite de IA): quem chamou retoma na próxima.
@@ -322,7 +325,7 @@ export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas }) {
     + `\n===== ESCREVA AGORA SÓ ESTAS QUESTÕES =====\n`
     + lote.map(q => `- Questão ${q.n}: tipo "${q.tipo}", assunto "${q.assunto}", vale ${q.pontos}.`).join('\n')
     + `\n\nEscreva cada uma por inteiro (enunciado, itens, gabarito e respostas_chave), seguindo o modelo do Pirralho. Mantenha exatamente o tipo e a pontuação indicados.`;
-  return chamarIA({ system: REGRAS_PROVA, tool: TOOL_QUESTOES, maxTokens: 3000, content: [{ type: 'text', text: txt }] });
+  return chamarIA({ system: REGRAS_PROVA, tool: TOOL_QUESTOES, maxTokens: 1600, content: [{ type: 'text', text: txt }] });
 }
 
 export async function planejarRevisoes(ctx, { mapa, prova, proibidos }) {
@@ -340,7 +343,7 @@ export async function escreverFichas(ctx, { lote, trecho, proibidos, jaFeitas })
     + `\n===== TERMOS PROIBIDOS (nem nas perguntas nem nas respostas) =====\n${proibidos.join(' | ')}\n`
     + (jaFeitas.length ? `\n===== PERGUNTAS JÁ FEITAS (não repetir) =====\n${jaFeitas.join('\n')}\n` : '')
     + `\n===== ESCREVA AGORA SÓ ESTAS FICHAS =====\n${lote.map(f => `- Ficha "${f.tema}" (páginas ${f.paginas || '—'})`).join('\n')}`;
-  return chamarIA({ system: REGRAS_REVISOES, tool: TOOL_FICHAS, maxTokens: 3000, content: [{ type: 'text', text: txt }] });
+  return chamarIA({ system: REGRAS_REVISOES, tool: TOOL_FICHAS, maxTokens: 2000, content: [{ type: 'text', text: txt }] });
 }
 
 export async function gerarProva(ctx, { atual, ajuste } = {}) {
