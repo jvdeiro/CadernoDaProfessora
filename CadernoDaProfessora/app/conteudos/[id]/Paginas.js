@@ -112,6 +112,15 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
   const partesFaltando = prog ? Math.max(0, prog.total - prog.feitas) : partesEstimadas;
   const eta = organizando ? partesFaltando * SEG_POR_PARTE + pausaRestante
     : faltam * segFoto + pausaRestante + partesEstimadas * SEG_POR_PARTE;
+  // % do trabalho todo: cada foto e cada parte do resumo contam como uma unidade
+  const unidades = total + (prog?.total || partesEstimadas);
+  const concluidas = prontas + (prog?.feitas || 0);
+  const pct = unidades ? Math.min(99, Math.round((concluidas / unidades) * 100)) : 0;
+  // o que está acontecendo agora, em uma frase
+  const agora = organizando
+    ? (prog ? `Conferindo a parte ${Math.min(prog.feitas + 1, prog.total)} de ${prog.total} do resumo` : 'Preparando a conferência do resumo')
+    : pausaRestante > 0 ? `Aguardando uma IA livre (${pausaRestante}s)`
+    : `Lendo a página ${Math.min(prontas + 1, total)} de ${total}`;
 
   const atualizar = useCallback(async () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) throw new Error('offline');
@@ -233,9 +242,13 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
         <div className="carregando acompanhamento" role="status" aria-live="polite">
           <Icone n="lapis" className="lapis" />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <b>{organizando || organizandoManual ? (prog ? `Organizando o resumo: parte ${Math.min(prog.feitas + 1, prog.total)} de ${prog.total}` : 'Organizando o resumo…') : `Lendo as páginas: ${prontas} de ${total} prontas`}</b>
-            <div className="pequeno">Tempo restante estimado: <b className="eta">{tempoRestante(eta)}</b></div>
-            <div className="progresso"><i style={{ width: `${organizando ? (prog ? (prog.feitas / prog.total) * 100 : 3) : (total ? (prontas / total) * 100 : 0)}%` }} /></div>
+            <b>{organizando || organizandoManual ? 'Organizando o resumo' : 'Lendo as páginas da apostila'}</b>
+            <span className="agora">{agora}</span>
+            <div className="progresso"><i style={{ width: `${Math.max(pct, 2)}%` }} /></div>
+            <div className="linha-pct">
+              <span className="pequeno">Tempo restante estimado: <b className="eta">{tempoRestante(eta)}</b></span>
+              <span className="pct">{pct}%</span>
+            </div>
             <Avisos />
           </div>
           {ativo && <Selo estado={sinc.estado} info={info} />}
