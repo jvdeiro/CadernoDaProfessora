@@ -78,7 +78,7 @@ export async function POST(req) {
     }
   }
   // 3) Avaliações: prova e revisões também saem em etapas, retomando de onde pararam
-  if (Date.now() - inicio < 150000) {
+  if (Date.now() - inicio < 200000) {
     const { data: avs } = await sb.from('avaliacoes').select('id,nome,processando,pausa_ate,gerando_em').not('processando', 'is', null);
     for (const a of avs || []) {
       if (a.pausa_ate && new Date(a.pausa_ate) > new Date()) continue;
@@ -90,7 +90,7 @@ export async function POST(req) {
         const d = await carregarAvaliacao(sb, a.id);
         if (!d) throw new Error('avaliação sumiu');
         const fn = a.processando === 'revisoes' ? gerarRevisoesEtapas : gerarProvaEtapas;
-        const r = await fn(sb, a.id, { ...d, prazo: inicio + 260000 });
+        const r = await fn(sb, a.id, { ...d, prazo: inicio + 270000 });
         if (r.pendente) {
           await sb.from('avaliacoes').update({ gerando_em: null }).eq('id', a.id);
           feitos.push(`${a.processando} ${a.nome}: ${r.etapa} ${r.feitas || 0}/${r.total ?? '?'}`);

@@ -40,12 +40,11 @@ let prazoRodada = 0;
 export function definirPrazo(ms) { prazoRodada = ms || 0; }
 const restaDoPrazo = () => (prazoRodada ? prazoRodada - Date.now() : Infinity);
 
-let faltamProvedores = 1, primeiroProvedor = true;
-async function comTempo(url, opts, ms = 160000) { // teto por IA, sempre dentro da rodada
-  // O primeiro provedor é o que costuma responder; os que recusam na hora (429) não gastam tempo,
-  // então sobra rodada sem uso. Dá 60% dela ao primeiro e divide o resto entre os seguintes.
-  const fatia = primeiroProvedor ? restaDoPrazo() * 0.6 : restaDoPrazo() / Math.max(1, faltamProvedores);
-  const limite = Math.min(ms, Math.max(25000, fatia));
+// Sem racionamento: a IA tem o tempo que a rodada permitir. Não há pressa — se uma questão levar
+// três minutos, ela leva; a rodada seguinte continua de onde parou. Apertar o tempo só trocava um
+// erro por outro ("resposta cortada" virava "demorou demais") sem nunca entregar a questão.
+async function comTempo(url, opts, ms = 240000) {
+  const limite = Math.min(ms, restaDoPrazo() - 10000);
   if (limite < 5000) throw new Pular('sem tempo nesta rodada');
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), limite);
   try { return await fetch(url, { ...opts, signal: ctl.signal }); }
@@ -127,7 +126,6 @@ async function chamarIA({ system, content, tool, maxTokens = 16000, grande = fal
   if (!ps.length) throw new ErroIA('A chave da IA ainda não foi configurada. Coloque GEMINI_API_KEY e OPENROUTER_API_KEY nas variáveis da Vercel.');
   const falhas = [];
   for (const [idx, p] of ps.entries()) {
-    faltamProvedores = ps.length - idx; primeiroProvedor = idx === 0;
     if (restaDoPrazo() < 8000) { falhas.push('tempo da rodada esgotado'); break; }
     const t0 = Date.now();
     try {
