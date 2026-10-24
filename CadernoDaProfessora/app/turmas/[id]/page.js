@@ -21,13 +21,13 @@ export default async function Turma({ params }) {
     <>
       <Voltar href="/turmas">Turmas</Voltar>
       <h1><span className={`hl ${t.cor}`}>{t.nome}</span></h1>
-      {t.idade && <p className="suave">Crianças de {t.idade} anos</p>}
+      {t.idade && <p className="dek">Crianças de {t.idade} anos.</p>}
       <div className="botoes">
         <Link className="botao pastel" style={{ '--c': 'var(--verde)' }} href={`/avaliacoes/nova?turma=${t.id}`}><Icone n="provas" style={{ width: 20 }} />Nova prova</Link>
         <Link className="botao pastel" style={{ '--c': 'var(--pessego)' }} href={`/conteudos/novo?turma=${t.id}`}><Icone n="camera" style={{ width: 20 }} />Mandar apostila</Link>
       </div>
 
-      <h2 className="faixa">Conteúdos <span className="suave pequeno" style={{ fontFamily: 'var(--f-texto)' }}>(apostilas)</span></h2>
+      <h2 className="faixa" style={{ '--hl': 'var(--pessego)' }}>Conteúdos <small>· apostilas</small></h2>
       {conteudos?.length ? <ul className="lista">{conteudos.map(c => (
         <ItemLink key={c.id} href={`/conteudos/${c.id}`} titulo={c.titulo} sub={`${c.paginas?.[0]?.count || 0} páginas · ${c.status === 'pronto' ? 'resumo pronto' : 'em preparo'}`} etq={c.materias?.nome} etqCor={cor(c.materias?.cor)} />
       ))}</ul> : <Vazio titulo="Nenhum conteúdo ainda">Mande as fotos da apostila para o sistema ler.</Vazio>}
