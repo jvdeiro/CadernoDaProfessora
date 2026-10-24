@@ -23,15 +23,15 @@ export default async function Conteudo({ params }) {
   return (
     <>
       <Voltar href={`/turmas/${c.turmas?.id}`}>{c.turmas?.nome}</Voltar>
-      <p style={{ margin: '6px 0 0' }}><span className="etq" style={{ '--c': cor(c.materias?.cor) }}>{c.materias?.nome}</span> <span className="etq" style={{ '--c': cor(c.turmas?.cor) }}>{c.turmas?.nome}</span></p>
+      <p className="eyebrow">Apostila · {c.materias?.nome} · {c.turmas?.nome}</p>
       <h1>{c.titulo}</h1>
-      {c.descricao && <p className="suave">{c.descricao}</p>}
+      {c.descricao && <p className="dek">{c.descricao}</p>}
 
       <Paginas conteudoId={c.id} iniciais={lista} pronto={c.status === 'pronto'} />
 
       {c.resumo_md && (
         <>
-          <h2>Resumo <span className="hl verde">fiel à apostila</span></h2>
+          <h2 className="faixa" style={{ '--hl': 'var(--verde)' }}>Resumo fiel à apostila</h2>
           {(info.paginas_fora?.length > 0 || info.paginas_faltando?.length > 0) && (
             <div className="aviso">
               {info.paginas_fora?.length > 0 && <p style={{ margin: 0 }}><b>Ficaram de fora</b> (outra matéria ou outro ano): {info.paginas_fora.map(p => `p. ${p.pagina}`).join(', ')}.</p>}
@@ -39,7 +39,7 @@ export default async function Conteudo({ params }) {
             </div>
           )}
           {info.topicos?.length > 0 && (
-            <ul className="lista">{info.topicos.map((t, i) => <li key={i} style={{ padding: '10px 2px' }}><span className="mao" style={{ fontSize: '1.25rem' }}>{t.titulo}</span> <span className="suave pequeno">{t.paginas}</span></li>)}</ul>
+            <ul className="lista">{info.topicos.map((t, i) => <li key={i}><span className="mao" style={{ fontSize: '1.25rem' }}>{t.titulo}</span> <span className="suave pequeno">{t.paginas}</span></li>)}</ul>
           )}
           <details className="dobra"><summary>Ler o resumo completo</summary><div className="resumo" dangerouslySetInnerHTML={{ __html: mdParaHtml(c.resumo_md) }} /></details>
           {c.anexo_erros_md && <details className="dobra"><summary>Pontos a conferir <span className="etq" style={{ '--c': 'var(--pessego)' }}>não caem na prova</span></summary><div className="resumo" dangerouslySetInnerHTML={{ __html: mdParaHtml(c.anexo_erros_md) }} /></details>}
