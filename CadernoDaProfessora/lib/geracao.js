@@ -52,7 +52,7 @@ export function trechoDe(conteudos, paginas) {
   const todas = conteudos.flatMap(c => fatiarResumo(c.resumo_md));
   const escolhidas = quer.size ? todas.filter(p => quer.has(p.numero)) : [];
   const usar = escolhidas.length ? escolhidas : todas.slice(0, 6);
-  return usar.map(p => p.texto).join('\n\n').slice(0, 24000);
+  return usar.map(p => p.texto).join('\n\n').slice(0, 9000);
 }
 
 const lotes = (arr, tam) => Array.from({ length: Math.ceil(arr.length / tam) }, (_, i) => arr.slice(i * tam, i * tam + tam));
@@ -64,29 +64,68 @@ async function emEtapas(sb, id, { prazo, chave, estado, itens, planejar, escreve
     await sb.from('avaliacoes').update({ geracao: { ...estado, feitas, chave }, ...extra }).eq('id', id);
     return feitas;
   };
+  // Conta a tentativa no item travado. Vale tanto para a falha direta quanto para a rodada que
+  // acabou sem conseguir nada: sem isso, um item que sempre estoura o tempo fica pendente para
+  // sempre e o limite de tentativas nunca dispara (já aconteceu: 1 hora no mesmo lote).
+  // Atenção: o plano tem contador próprio. Um índice negativo num array some ao virar JSON,
+  // então a tentativa do plano nunca ficava salva e ele podia repetir para sempre.
+  const contarTentativa = async i => {
+    let n;
+    if (i < 0) { n = (estado.tentativasPlano || 0) + 1; estado.tentativasPlano = n; }
+    else { estado.tentativas = Object.assign([], estado.tentativas || [], { [i]: ((estado.tentativas || [])[i] || 0) + 1 }); n = estado.tentativas[i]; }
+    const desistir = n >= MAX_TENTATIVAS;
+    if (desistir && i >= 0) estado.lotes[i] = [];   // segue sem este item
+    await salvar();
+    return desistir;
+  };
   definirPrazo(prazo);
   try {
     if (!estado.plano) {
-      if (Date.now() > prazo - 15000) return { pendente: true, feitas: 0, total: null, etapa: 'plano' };
-      estado.plano = await planejar();
+      const desistiuDoPlano = async () => {
+        const e = new Error('Não consegui montar o plano depois de várias tentativas. As IAs gratuitas estão fora do ar; tente de novo daqui a pouco.');
+        e.temporario = false; // para de tentar e avisa, em vez de repetir para sempre
+        throw e;
+      };
+      if (Date.now() > prazo - 15000) {
+        if (await contarTentativa(-1)) await desistiuDoPlano();
+        return { pendente: true, feitas: 0, total: null, etapa: 'plano' };
+      }
+      try { estado.plano = await planejar(); }
+      catch (e) { if (await contarTentativa(-1)) await desistiuDoPlano(); throw e; }
       estado.lotes = [];
+      estado.tentativas = [];
+      estado.tentativasPlano = 0;
       await salvar();
     }
     const grupos = lotes(itens(estado.plano), POR_LOTE);
     estado.total = grupos.length;
+    let fezAlgo = false;
     for (let i = 0; i < grupos.length; i++) {
       if (estado.lotes[i]) continue;
-      if (Date.now() > prazo - 15000) return { pendente: true, feitas: await salvar(), total: grupos.length, etapa: 'lote' };
+      if (Date.now() > prazo - 15000) {
+        if (!fezAlgo) await contarTentativa(i);   // rodada inteira sem conseguir nada
+        return { pendente: true, feitas: await salvar(), total: grupos.length, etapa: 'lote' };
+      }
       try {
         estado.lotes[i] = await escrever(grupos[i], estado.lotes.flat().filter(Boolean));
+        fezAlgo = true;
       } catch (e) {
+        const desistiu = await contarTentativa(i);
+        if (desistiu) continue;                   // segue sem este lote
         if (e.semTempo) return { pendente: true, feitas: await salvar(), total: grupos.length, etapa: 'lote' };
-        estado.tentativas = Object.assign([], estado.tentativas || [], { [i]: ((estado.tentativas || [])[i] || 0) + 1 });
-        await salvar();
-        if (estado.tentativas[i] < MAX_TENTATIVAS) throw e;
-        estado.lotes[i] = [];   // segue sem este lote; o fechamento ajusta o que depender dele
-        await salvar();
+        throw e;
       }
+    }
+    // Nunca entregar material pela metade: melhor avisar e guardar o que deu certo.
+    const vazios = estado.lotes.filter(l => Array.isArray(l) && !l.length).length;
+    if (vazios > grupos.length / 3) {
+      // devolve os lotes que falharam para a fila, para que uma nova tentativa recomece só por eles
+      estado.lotes = estado.lotes.map(l => (Array.isArray(l) && !l.length ? undefined : l));
+      estado.tentativas = [];
+      await salvar();
+      const e = new Error(`Consegui escrever só ${grupos.length - vazios} de ${grupos.length} partes: as IAs gratuitas estão no limite. O que ficou pronto está guardado — é só mandar criar de novo daqui a pouco que ele continua de onde parou.`);
+      e.temporario = false;
+      throw e;
     }
     await fechar(estado.lotes.flat().filter(Boolean), estado.plano);
     return { pronto: true, total: grupos.length };

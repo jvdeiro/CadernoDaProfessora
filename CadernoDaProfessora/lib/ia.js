@@ -40,8 +40,10 @@ let prazoRodada = 0;
 export function definirPrazo(ms) { prazoRodada = ms || 0; }
 const restaDoPrazo = () => (prazoRodada ? prazoRodada - Date.now() : Infinity);
 
-async function comTempo(url, opts, ms = 90000) { // 1,5 min por IA, ou o que sobrar da rodada
-  const limite = Math.min(ms, restaDoPrazo());
+let faltamProvedores = 1;
+async function comTempo(url, opts, ms = 90000) { // no máximo 1,5 min por IA, e sempre dentro da rodada
+  // divide o que resta entre os provedores ainda não tentados: assim todos cabem na mesma rodada
+  const limite = Math.min(ms, Math.max(25000, restaDoPrazo() / Math.max(1, faltamProvedores)));
   if (limite < 5000) throw new Pular('sem tempo nesta rodada');
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), limite);
   try { return await fetch(url, { ...opts, signal: ctl.signal }); }
@@ -113,7 +115,8 @@ async function chamarIA({ system, content, tool, maxTokens = 16000, grande = fal
   const ps = provedores(content.some(c => c.type === 'image'), grande);
   if (!ps.length) throw new ErroIA('A chave da IA ainda não foi configurada. Coloque GEMINI_API_KEY e OPENROUTER_API_KEY nas variáveis da Vercel.');
   const falhas = [];
-  for (const p of ps) {
+  for (const [idx, p] of ps.entries()) {
+    faltamProvedores = ps.length - idx;
     if (restaDoPrazo() < 8000) { falhas.push('tempo da rodada esgotado'); break; }
     try {
       let r;
@@ -314,7 +317,7 @@ export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas }) {
     + `\n===== ESCREVA AGORA SÓ ESTAS QUESTÕES =====\n`
     + lote.map(q => `- Questão ${q.n}: tipo "${q.tipo}", assunto "${q.assunto}", vale ${q.pontos}.`).join('\n')
     + `\n\nEscreva cada uma por inteiro (enunciado, itens, gabarito e respostas_chave), seguindo o modelo do Pirralho. Mantenha exatamente o tipo e a pontuação indicados.`;
-  return chamarIA({ system: REGRAS_PROVA, tool: TOOL_QUESTOES, maxTokens: 7000, content: [{ type: 'text', text: txt }] });
+  return chamarIA({ system: REGRAS_PROVA, tool: TOOL_QUESTOES, maxTokens: 5000, content: [{ type: 'text', text: txt }] });
 }
 
 export async function planejarRevisoes(ctx, { mapa, prova, proibidos }) {

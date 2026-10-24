@@ -57,27 +57,34 @@ export async function organizarConteudo(sb, id, { prazo = Date.now() + 150000 } 
   await salvar();
 
   definirPrazo(prazo); // nenhuma chamada de IA passa do prazo desta rodada
+  // Conta a tentativa na parte travada — tanto na falha direta quanto na rodada que acabou sem
+  // conseguir nada. Sem isso, uma parte que sempre estoura o tempo fica pendente para sempre.
+  const contarTentativa = async i => {
+    const t = (org.tentativas[i] || 0) + 1;
+    org = { ...org, tentativas: Object.assign([], org.tentativas, { [i]: t }) };
+    if (t >= MAX_TENTATIVAS) org = { ...org, feitas: Object.assign([], org.feitas, { [i]: { pulada: true, paginas: partes[i].paginas } }) };
+    await salvar();
+    return t >= MAX_TENTATIVAS;
+  };
   try {
+    let fezAlgo = false;
     for (let i = 0; i < partes.length; i++) {
       if (org.feitas[i]) continue;
-      if (Date.now() > prazo - 15000) return { pendente: true, feitas: await salvar(), total: partes.length };
+      if (Date.now() > prazo - 15000) {
+        if (!fezAlgo) await contarTentativa(i);   // rodada inteira sem conseguir nada
+        return { pendente: true, feitas: await salvar(), total: partes.length };
+      }
       let r;
       try {
         r = await revisarMaterial({ resumo: partes[i].texto, turma: c.turmas?.nome, materia: c.materias?.nome, descricao: c.descricao, parte: { n: i + 1, total: partes.length, paginas: partes[i].paginas } });
       } catch (e) {
-        // Sem tempo nesta rodada não é falha: o que já ficou pronto está salvo e a próxima rodada segue daqui.
+        const desistiu = await contarTentativa(i);
+        if (desistiu) continue;   // segue sem a conferência dessas páginas (fica registrado no anexo)
         if (e.semTempo) return { pendente: true, feitas: await salvar(), total: partes.length };
-        // Uma parte teimosa não pode travar a apostila para sempre: depois de algumas tentativas,
-        // ela segue sem a conferência dessas páginas e isso fica registrado no anexo.
-        const t = (org.tentativas[i] || 0) + 1;
-        org = { ...org, tentativas: Object.assign([], org.tentativas, { [i]: t }) };
-        await salvar();
-        if (t < MAX_TENTATIVAS) throw e;
-        org = { ...org, feitas: Object.assign([], org.feitas, { [i]: { pulada: true, paginas: partes[i].paginas } }) };
-        await salvar();
-        continue;
+        throw e;
       }
       org = { ...org, feitas: Object.assign([], org.feitas, { [i]: r }) };
+      fezAlgo = true;
       await salvar(); // parte guardada: se cair agora, recomeça da próxima
     }
   } finally { definirPrazo(0); }
