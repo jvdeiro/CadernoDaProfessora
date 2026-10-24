@@ -62,7 +62,7 @@ async function checar(res, p) {
   if (res.status === 500 && p?.tipo === 'gemini') throw new Esperar(5); // instabilidade passageira
   if (res.status === 429 && p?.tipo === 'gemini') { // limite por minuto do Google: vale esperar um pouco
     const s = Number((txt.match(/"retryDelay":\s*"(\d+)/) || [])[1] || 20);
-    if (s <= 45) throw new Esperar(s);
+    if (s <= 20) throw new Esperar(s);
   }
   if ([408, 409, 413, 422, 429, 500, 502, 503, 504, 529].includes(res.status) || res.status === 400 && /token|context|length|too large|quota/i.test(txt)) throw new Pular(`erro ${res.status}`);
   throw new Pular(`erro ${res.status}: ${txt}`);
@@ -325,7 +325,7 @@ export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas }) {
     + `\n===== A QUESTÃO QUE VOCÊ DEVE ESCREVER AGORA =====\n`
     + lote.map(q => `Questão ${q.n} de ${plano?.questoes?.length || 10}: tipo "${q.tipo}", assunto "${q.assunto}", vale ${q.pontos}.`).join('\n')
     + `\n\nEscreva SÓ essa questão, por inteiro (enunciado, itens, gabarito, pontuacao e respostas_chave). Mantenha exatamente o tipo e a pontuação indicados. Devolva "questoes" com um único item.`;
-  return chamarIA({ system: REGRAS_QUESTAO, tool: TOOL_QUESTOES, maxTokens: 1600, content: [{ type: 'text', text: txt }] });
+  return chamarIA({ system: REGRAS_QUESTAO, tool: TOOL_QUESTOES, maxTokens: 4000, content: [{ type: 'text', text: txt }] });
 }
 
 export async function planejarRevisoes(ctx, { mapa, prova, proibidos }) {
