@@ -34,7 +34,8 @@ export async function POST(req) {
       feitos.push(`foto ${r.numero || pg.id}: ${r.status}`);
     } catch (e) {
       feitos.push(`foto ${pg.id}: ${e.message}`);
-      if (e.temporario) { await sb.from('conteudos').update({ pausa_ate: daqui(PAUSA_SEM_IA_S) }).eq('id', pg.conteudo_id); break; }
+      await sb.from('conteudos').update({ ultimo_erro: `leitura: ${e.message}`.slice(0, 900), ...(e.temporario ? { pausa_ate: daqui(PAUSA_SEM_IA_S) } : {}) }).eq('id', pg.conteudo_id);
+      if (e.temporario) break;
     }
     await dormir(RESPIRO_MS);
   }
@@ -58,7 +59,7 @@ export async function POST(req) {
           feitos.push(`organizando ${c.titulo}: parte ${r.feitas} de ${r.total}`);
           break;
         }
-        await sb.from('conteudos').update({ processando: false, organizando_em: null, pausa_ate: null }).eq('id', c.id);
+        await sb.from('conteudos').update({ processando: false, organizando_em: null, pausa_ate: null, ultimo_erro: null }).eq('id', c.id);
         const { count: comErro } = await sb.from('paginas').select('id', { count: 'exact', head: true }).eq('conteudo_id', c.id).eq('status', 'erro');
         await avisar(sb, {
           titulo: 'Apostila pronta! 📒',
@@ -67,7 +68,7 @@ export async function POST(req) {
         }, { vapidPrivada: cred.vapid_privada, vapidPublica: cred.vapid_publica });
         feitos.push(`organizou ${c.titulo}`);
       } catch (e) {
-        await sb.from('conteudos').update({ organizando_em: null, ...(e.temporario ? { pausa_ate: daqui(PAUSA_SEM_IA_S) } : { processando: false }) }).eq('id', c.id);
+        await sb.from('conteudos').update({ organizando_em: null, ultimo_erro: `organizar: ${e.message}`.slice(0, 900), ...(e.temporario ? { pausa_ate: daqui(PAUSA_SEM_IA_S) } : { processando: false }) }).eq('id', c.id);
         feitos.push(`organizar ${c.titulo}: ${e.message}`);
       }
       break; // uma organização por rodada
