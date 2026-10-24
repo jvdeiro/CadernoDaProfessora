@@ -10,7 +10,7 @@ export async function POST(req, { params }) {
   const sb = await createClient();
   const { data: p } = await sb.from('paginas').select('*,conteudos(descricao,turmas(nome,ano),materias(nome))').eq('id', id).single();
   if (!p) return NextResponse.json({ erro: 'Página não encontrada.' }, { status: 404 });
-  await sb.from('paginas').update({ status: 'lendo' }).eq('id', id);
+  await sb.from('paginas').update({ status: 'lendo', lendo_em: new Date().toISOString() }).eq('id', id);
   try {
     const { data: blob, error } = await sb.storage.from('paginas').download(p.storage_path);
     if (error) throw new Error('Não consegui abrir a foto.');
@@ -27,6 +27,10 @@ export async function POST(req, { params }) {
     await sb.from('paginas').update({ transcricao: t, status, erro }).eq('id', id);
     return NextResponse.json({ ok: true, status, numero });
   } catch (e) {
+    if (e.temporario) { // nenhuma IA livre agora: a foto volta para a fila e a tela tenta de novo sozinha
+      await sb.from('paginas').update({ status: 'enviada', erro: 'Esperando uma IA livre' }).eq('id', id);
+      return NextResponse.json({ erro: e.message, esperar: true }, { status: 503 });
+    }
     await sb.from('paginas').update({ status: 'erro', erro: e.message }).eq('id', id);
     return NextResponse.json({ erro: e.message }, { status: 500 });
   }
