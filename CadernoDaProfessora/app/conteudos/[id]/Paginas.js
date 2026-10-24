@@ -49,7 +49,7 @@ export default function Paginas({ conteudoId, iniciais, pronto }) {
         feitas++; setProg({ f: feitas, t: lista.length });
       }
     };
-    await Promise.all([trabalhador(), trabalhador(), trabalhador()]);
+    await Promise.all([trabalhador(), trabalhador()]);
   }
   async function organizar() {
     setFase('organizando'); setErro('');
