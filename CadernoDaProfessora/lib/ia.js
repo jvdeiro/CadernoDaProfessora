@@ -10,7 +10,7 @@ class Pular extends Error {} // falha que justifica tentar o próximo provedor
 
 const lista = (v, padrao) => (v || padrao).split(',').map(x => x.trim()).filter(Boolean);
 
-function provedores(comImagem) {
+function provedores(comImagem, grande) {
   const mistral = [], google = [], openrouter = [];
   if (process.env.MISTRAL_API_KEY) for (const m of lista(process.env.MODELOS_MISTRAL, 'mistral-large-latest'))
     mistral.push({ nome: `Mistral ${m}`, tipo: 'openai', url: 'https://api.mistral.ai/v1/chat/completions', chave: process.env.MISTRAL_API_KEY, model: m, imagemTexto: true });
@@ -19,9 +19,10 @@ function provedores(comImagem) {
   if (process.env.OPENROUTER_API_KEY) for (const m of lista(comImagem ? process.env.MODELOS_OPENROUTER_FOTOS : process.env.MODELOS_OPENROUTER,
     comImagem ? 'google/gemma-4-31b-it:free,nvidia/nemotron-3.5-super-vl:free' : 'google/gemma-4-31b-it:free,nvidia/nemotron-3-ultra-550b-a55b:free,google/gemma-4-26b-a4b-it:free'))
     openrouter.push({ nome: `OpenRouter ${m}`, tipo: 'openai', url: 'https://openrouter.ai/api/v1/chat/completions', chave: process.env.OPENROUTER_API_KEY, model: m });
-  // Fotos: o Google aguenta muitos pedidos por dia. Textos grandes (prova, revisões): o Google tem limite
-  // baixo de tokens por minuto, então o OpenRouter vem antes.
-  return comImagem ? [...mistral, ...google, ...openrouter] : [...mistral, ...openrouter, ...google];
+  // O OpenRouter gratuito tem cota DIÁRIA baixa, então fica guardado para o que o Google não dá conta:
+  // as chamadas grandes (prova, revisões), onde pesa o limite de tokens por minuto do Google.
+  // Fotos e conferência do resumo são pedidos pequenos: Google primeiro, que aguenta muitos por dia.
+  return grande ? [...mistral, ...openrouter, ...google] : [...mistral, ...google, ...openrouter];
 }
 
 function extrairJSON(txt) {
@@ -54,6 +55,7 @@ const dormir = ms => new Promise(r => setTimeout(r, ms));
 async function checar(res, p) {
   if (res.ok) return;
   const txt = (await res.text()).slice(0, 2000);
+  if (res.status === 500 && p?.tipo === 'gemini') throw new Esperar(5); // instabilidade passageira
   if (res.status === 429 && p?.tipo === 'gemini') { // limite por minuto do Google: vale esperar um pouco
     const s = Number((txt.match(/"retryDelay":\s*"(\d+)/) || [])[1] || 20);
     if (s <= 45) throw new Esperar(s);
@@ -107,8 +109,8 @@ async function chamarGemini(p, { system, content, tool, maxTokens }) {
   return extrairJSON((cand.content?.parts || []).filter(x => x.text && !x.thought).map(x => x.text).join(''));
 }
 
-async function chamarIA({ system, content, tool, maxTokens = 16000 }) {
-  const ps = provedores(content.some(c => c.type === 'image'));
+async function chamarIA({ system, content, tool, maxTokens = 16000, grande = false }) {
+  const ps = provedores(content.some(c => c.type === 'image'), grande);
   if (!ps.length) throw new ErroIA('A chave da IA ainda não foi configurada. Coloque GEMINI_API_KEY e OPENROUTER_API_KEY nas variáveis da Vercel.');
   const falhas = [];
   for (const p of ps) {
@@ -232,7 +234,7 @@ export async function transcreverPagina({ imagemBase64, mediaType, turma, materi
 export async function revisarMaterial({ resumo, turma, materia, descricao, parte }) {
   const trecho = parte ? `\nATENÇÃO: este é o trecho ${parte.n} de ${parte.total} do material (páginas ${parte.paginas}). Revise SÓ este trecho: "topicos" só deste trecho e "paginas_faltando" vazio (o sistema calcula).` : '';
   return chamarIA({
-    system: REGRAS_ANEXO, tool: TOOL_ANEXO, maxTokens: 8000,
+    system: REGRAS_ANEXO, tool: TOOL_ANEXO, maxTokens: 6000,
     content: [{ type: 'text', text: `Turma: ${turma}. Matéria: ${materia}.${descricao ? '\nO que a professora disse sobre este material: ' + descricao : ''}${trecho}\n\nTRANSCRIÇÃO DAS PÁGINAS:\n\n${resumo}` }],
   });
 }
@@ -258,7 +260,7 @@ export async function gerarProva(ctx, { atual, ajuste } = {}) {
   } else {
     txt += `\n\nMonte a prova agora.`;
   }
-  return chamarIA({ system: REGRAS_PROVA, tool: TOOL_PROVA, maxTokens: 20000, content: [{ type: 'text', text: txt }] });
+  return chamarIA({ system: REGRAS_PROVA, tool: TOOL_PROVA, maxTokens: 20000, grande: true, content: [{ type: 'text', text: txt }] });
 }
 
 export async function gerarRevisoes(ctx, { prova, proibidos, atual, ajuste } = {}) {
@@ -267,5 +269,5 @@ export async function gerarRevisoes(ctx, { prova, proibidos, atual, ajuste } = {
   txt += `\n===== TERMOS PROIBIDOS NAS REVISÕES (perguntas e respostas) =====\n${proibidos.join(' | ')}\n`;
   if (atual) txt += `\n===== REVISÕES ATUAIS (JSON) =====\n${JSON.stringify(atual)}\n\n${REGRAS_AJUSTE}\nAJUSTE PEDIDO:\n${ajuste}`;
   else txt += `\nMonte as 8 fichas agora.`;
-  return chamarIA({ system: REGRAS_REVISOES, tool: TOOL_REVISOES, maxTokens: 12000, content: [{ type: 'text', text: txt }] });
+  return chamarIA({ system: REGRAS_REVISOES, tool: TOOL_REVISOES, maxTokens: 12000, grande: true, content: [{ type: 'text', text: txt }] });
 }
