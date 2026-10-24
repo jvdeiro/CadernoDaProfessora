@@ -122,7 +122,9 @@ async function chamarIA({ system, content, tool, maxTokens = 16000 }) {
       console.warn('[ia]', p.nome, e.message);
     }
   }
-  throw new ErroIA('As IAs gratuitas não conseguiram responder agora (limite atingido ou fora do ar). Espere alguns minutos e tente de novo. Detalhe: ' + falhas.join(' · '));
+  const erro = new ErroIA('Todas as IAs gratuitas estão no limite ou fora do ar agora. Detalhe: ' + falhas.join(' · '));
+  erro.temporario = true;
+  throw erro;
 }
 
 // ---------- esquemas ----------
