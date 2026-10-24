@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import Icone from '@/components/Icone';
 import Avisos, { inscreverAvisos } from '@/components/Avisos';
 import { postPersistente } from '@/lib/persistente';
+import { Selo, useAtualizacao, INTERVALO_S } from '@/components/Acompanhar';
 
 async function reduzir(file) {
   const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
@@ -19,8 +20,6 @@ async function reduzir(file) {
 const ST = { enviada: 'Na fila', lendo: 'Lendo…', lida: 'Lida', erro: 'Deu erro', fora: 'Fora do assunto' };
 const SEG_POR_FOTO = 35;          // estimativa inicial (leitura + respiro), ajustada pelo ritmo real
 const SEG_POR_PARTE = 90;         // cada parte do resumo conferida pela IA (umas 10 páginas)
-const INTERVALO_S = 15;           // de quanto em quanto tempo a tela confere o andamento
-const ESPERAS_OFFLINE = [10, 20, 30];
 const numeroDe = folhas => (folhas || []).map(x => x.numero).filter(Boolean).join(', ') || null;
 const num = s => { const m = String(s || '').match(/\d+/); return m ? parseInt(m[0]) : 99999; };
 // Ordem da apostila: fotos já catalogadas primeiro (digital, depois física, por número de página); as outras no fim.
@@ -57,34 +56,11 @@ function tempoRestante(seg) {
   return m < 60 ? `cerca de ${m} min` : `cerca de ${Math.floor(m / 60)} h ${m % 60} min`;
 }
 
-function Selo({ estado, info }) {
-  const [aberto, setAberto] = useState(false);
-  const rotulo = { atualizando: 'Atualizando', ok: 'Tudo certo', offline: 'Sem internet' }[estado];
-  return (
-    <div className="selo-wrap">
-      <button type="button" className={`selo ${estado}`} aria-label={`${rotulo}. Toque para ver detalhes.`} aria-expanded={aberto} onClick={() => setAberto(a => !a)}>
-        {estado === 'atualizando' && <svg viewBox="0 0 24 24" className="cobrinha" aria-hidden="true"><circle cx="12" cy="12" r="8" /></svg>}
-        {estado === 'ok' && <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 12.5l3.6 3.4 7.6-8.4" /></svg>}
-        {estado === 'offline' && <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5c4.5-4 11.5-4 16 0M7 13c2.9-2.4 7.1-2.4 10 0M10.2 16.4c1-.8 2.6-.8 3.6 0M4 4l16 16" /></svg>}
-      </button>
-      {aberto && (
-        <div className="selo-info" role="status">
-          <b>{rotulo}</b>
-          {estado === 'offline'
-            ? <>Sem conexão desde {info.desde}. Tento de novo em {info.proxima} s. A leitura continua no servidor mesmo assim.</>
-            : <>Última atualização: {info.ultima}. A tela se atualiza sozinha a cada {info.intervalo} s.</>}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function Paginas({ conteudoId, iniciais, pronto, processandoInicial }) {
   const [pags, setPags] = useState(iniciais);
   const [proc, setProc] = useState({ processando: processandoInicial, pausaAte: null, organizando: false, prog: null });
   const [envio, setEnvio] = useState(null); // { f, t } enquanto sobe as fotos
   const [erro, setErro] = useState('');
-  const [sinc, setSinc] = useState({ estado: 'ok', ultima: Date.now(), falhas: 0, desde: null, proxima: 0 });
   const [agora, setAgora] = useState(Date.now());
   const [organizandoManual, setOrganizandoManual] = useState(false);
   const ritmo = useRef({ prontas: null, t: null, segs: [] });
@@ -123,9 +99,6 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
     : `Lendo a página ${Math.min(prontas + 1, total)} de ${total}`;
 
   const atualizar = useCallback(async () => {
-    if (typeof navigator !== 'undefined' && !navigator.onLine) throw new Error('offline');
-    const t0 = Date.now();
-    setSinc(s => ({ ...s, estado: 'atualizando' }));
     const [{ data: ps, error: e1 }, { data: c, error: e2 }] = await Promise.all([
       sb.from('paginas').select('id,status,erro,lendo_em,folhas:transcricao->paginas,origem:transcricao->>origem').eq('conteudo_id', conteudoId),
       sb.from('conteudos').select('processando,status,pausa_ate,organizando_em,prog:info->organizacao_progresso').eq('id', conteudoId).single(),
@@ -136,32 +109,10 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
       if (antes.processando && !c.processando) setTimeout(() => router.refresh(), 300); // terminou: mostra o resumo
       return { processando: c.processando, pausaAte: c.pausa_ate, organizando: !!c.organizando_em, prog: c.prog || null };
     });
-    const resto = 3000 - (Date.now() - t0); // a cobrinha gira pelo menos ~3 s, para dar para ver
-    if (resto > 0) await new Promise(r => setTimeout(r, resto));
-    setSinc({ estado: 'ok', ultima: Date.now(), falhas: 0, desde: null, proxima: 0 });
   }, [conteudoId]);
 
-  // atualização automática enquanto a leitura está ativa (e volta sozinha quando a internet volta)
-  useEffect(() => {
-    if (!ativo) return;
-    let parar = false, timer;
-    const ciclo = async () => {
-      let espera = INTERVALO_S;
-      try { await atualizar(); }
-      catch {
-        setSinc(s => {
-          const falhas = s.falhas + 1;
-          espera = ESPERAS_OFFLINE[Math.min(falhas - 1, ESPERAS_OFFLINE.length - 1)];
-          return { ...s, estado: 'offline', falhas, desde: s.desde || Date.now(), proxima: Date.now() + espera * 1000 };
-        });
-      }
-      if (!parar) timer = setTimeout(ciclo, espera * 1000);
-    };
-    ciclo();
-    const voltou = () => { clearTimeout(timer); ciclo(); };
-    window.addEventListener('online', voltou);
-    return () => { parar = true; clearTimeout(timer); window.removeEventListener('online', voltou); };
-  }, [ativo, atualizar]);
+  const sinc = useAtualizacao(atualizar, ativo); // { estado, info } do selo
+
 
   useEffect(() => { const t = setInterval(() => setAgora(Date.now()), 1000); return () => clearInterval(t); }, []);
 
@@ -208,12 +159,6 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
     setOrganizandoManual(false);
   }
 
-  const info = {
-    ultima: new Date(sinc.ultima).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-    desde: sinc.desde ? new Date(sinc.desde).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-    proxima: Math.max(0, Math.round((sinc.proxima - agora) / 1000)),
-    intervalo: INTERVALO_S,
-  };
   const ocupado = !!envio || ativo || organizandoManual;
   const emOrdem = ordenar(pags);
   const refFoto = useReorganizar(emOrdem.map(p => p.id).join());
@@ -251,7 +196,7 @@ export default function Paginas({ conteudoId, iniciais, pronto, processandoInici
             </div>
             <Avisos />
           </div>
-          {ativo && <Selo estado={sinc.estado} info={info} />}
+          {ativo && <Selo estado={sinc.estado} info={sinc.info} oQue="A leitura continua no servidor mesmo assim." />}
         </div>
       )}
       {erro && <p className="aviso erro" role="alert">{erro}</p>}

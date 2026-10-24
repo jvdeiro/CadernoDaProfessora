@@ -1,12 +1,12 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Icone from '@/components/Icone';
 import Avisos, { inscreverAvisos } from '@/components/Avisos';
 import { createClient } from '@/lib/supabase/client';
 import { postPersistente } from '@/lib/persistente';
+import { Selo, useAtualizacao } from '@/components/Acompanhar';
 
-const INTERVALO_S = 15;
 const SEG_POR_LOTE = 70;   // cada lote: um pedido pequeno à IA
 const LOTES_ESTIMADOS = 5; // 10 questões / 2 por lote, enquanto o plano não chega
 const tempoRestante = seg => seg < 60 ? 'menos de 1 min' : `cerca de ${Math.round(seg / 60)} min`;
@@ -31,18 +31,14 @@ export default function Gerador({ id, tipo, existe, bloqueado, checagem, process
 
   // Acompanha o robô do servidor: dá para fechar o app, o trabalho continua e o progresso fica salvo.
   const acompanhar = useCallback(async () => {
-    const { data } = await sb.from('avaliacoes').select('processando,geracao').eq('id', id).single();
+    const { data, error } = await sb.from('avaliacoes').select('processando,geracao').eq('id', id).single();
+    if (error) throw new Error('falha');
     if (!data) return;
     setProg(data.geracao ? { feitas: data.geracao.feitas || 0, total: data.geracao.total || null, temPlano: !!data.geracao.plano } : null);
     if (data.processando !== tipo) { setFila(false); router.refresh(); }
   }, [id, tipo]);
 
-  useEffect(() => {
-    if (!fila) return;
-    const t = setInterval(acompanhar, INTERVALO_S * 1000);
-    acompanhar();
-    return () => clearInterval(t);
-  }, [fila, acompanhar]);
+  const sinc = useAtualizacao(acompanhar, fila); // atualiza sozinho e alimenta o selo
 
   async function rodar(body) {
     setErro(''); setFase('criando');
@@ -70,7 +66,7 @@ export default function Gerador({ id, tipo, existe, bloqueado, checagem, process
         ? `${ehProva ? 'Escrevendo as questões' : 'Escrevendo as fichas'} — lote ${Math.min(prog.feitas + 1, prog.total)} de ${prog.total}`
         : (ehProva ? 'Escrevendo as primeiras questões' : 'Escrevendo as primeiras fichas');
     return (
-      <div className="carregando" role="status" aria-live="polite">
+      <div className="carregando acompanhamento" role="status" aria-live="polite">
         <Icone n="lapis" className="lapis" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <b>{ehProva ? 'Criando a prova e o gabarito' : 'Criando as 8 fichas de revisão'}</b>
@@ -82,6 +78,7 @@ export default function Gerador({ id, tipo, existe, bloqueado, checagem, process
           </div>
           <Avisos />
         </div>
+        <Selo estado={sinc.estado} info={sinc.info} oQue={`${ehProva ? 'A prova' : 'As revisões'} continuam sendo escritas no servidor mesmo assim.`} />
       </div>
     );
   }
