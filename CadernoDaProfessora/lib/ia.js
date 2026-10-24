@@ -1,100 +1,112 @@
-// Chamadas à IA com saída estruturada.
-// Usa o Gemini (faixa gratuita do Google) quando GEMINI_API_KEY existe; senão, o Claude (ANTHROPIC_API_KEY).
+// Chamadas à IA com saída estruturada — só modelos abertos (open-weight) em faixas gratuitas.
+// Ordem de tentativa (a próxima entra sozinha quando uma atinge o limite ou falha):
+//   1. Mistral Large 3 (Apache 2.0, lê imagens)       → MISTRAL_API_KEY
+//   2. Gemma 4 31B / 26B pela API do Google (abertos) → GEMINI_API_KEY
+//   3. Modelos gratuitos do OpenRouter                 → OPENROUTER_API_KEY (opcional)
 import { REGRAS_TRANSCRICAO, REGRAS_ANEXO, REGRAS_PROVA, REGRAS_REVISOES, REGRAS_AJUSTE } from './regras.js';
 
-const USA_GEMINI = !!process.env.GEMINI_API_KEY;
-const MODELOS = USA_GEMINI
-  ? { rapido: process.env.MODELO_RAPIDO || 'gemini-3.5-flash-lite', principal: process.env.MODELO_PRINCIPAL || 'gemini-3.8-flash' }
-  : { rapido: process.env.MODELO_RAPIDO || 'claude-sonnet-5-5', principal: process.env.MODELO_PRINCIPAL || 'claude-opus-5-5' };
-
 export class ErroIA extends Error {}
+class Pular extends Error {} // falha que justifica tentar o próximo provedor
 
-function chamarIA({ nivel, system, content, tool, maxTokens }) {
-  const model = MODELOS[nivel];
-  return USA_GEMINI ? chamarGemini({ model, system, content, tool, maxTokens }) : chamarClaude({ model, system, content, tool, maxTokens });
+const lista = (v, padrao) => (v || padrao).split(',').map(x => x.trim()).filter(Boolean);
+
+function provedores(comImagem) {
+  const ps = [];
+  if (process.env.MISTRAL_API_KEY) for (const m of lista(process.env.MODELOS_MISTRAL, 'mistral-large-latest'))
+    ps.push({ nome: `Mistral ${m}`, tipo: 'openai', url: 'https://api.mistral.ai/v1/chat/completions', chave: process.env.MISTRAL_API_KEY, model: m, imagemTexto: true });
+  if (process.env.GEMINI_API_KEY) for (const m of lista(process.env.MODELOS_GEMMA, 'gemma-4-31b-it,gemma-4-26b-a4b-it'))
+    ps.push({ nome: `Google ${m}`, tipo: 'gemini', chave: process.env.GEMINI_API_KEY, model: m });
+  if (process.env.OPENROUTER_API_KEY) for (const m of lista(process.env.MODELOS_OPENROUTER, comImagem ? 'google/gemma-4-31b-it:free' : 'openai/gpt-oss-120b:free,google/gemma-4-31b-it:free'))
+    ps.push({ nome: `OpenRouter ${m}`, tipo: 'openai', url: 'https://openrouter.ai/api/v1/chat/completions', chave: process.env.OPENROUTER_API_KEY, model: m });
+  return ps;
 }
 
-// ---------- Gemini ----------
-// Converte o esquema JSON para o formato de esquema do Gemini (tipos em maiúsculas, "nullable").
-function esquemaGemini(s) {
-  if (Array.isArray(s)) return s.map(esquemaGemini);
-  if (!s || typeof s !== 'object') return s;
-  const o = {};
-  let tipo = s.type;
-  if (Array.isArray(tipo)) { o.nullable = tipo.includes('null'); tipo = tipo.find(t => t !== 'null'); }
-  if (tipo) o.type = String(tipo).toUpperCase();
-  if (s.description) o.description = s.description;
-  if (s.enum) o.enum = s.enum;
-  if (s.properties) o.properties = Object.fromEntries(Object.entries(s.properties).map(([k, v]) => [k, esquemaGemini(v)]));
-  if (s.required) o.required = s.required;
-  if (s.items) o.items = esquemaGemini(s.items);
-  return o;
+function extrairJSON(txt) {
+  const t = String(txt || '').replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, '');
+  try { return JSON.parse(t); } catch {}
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch {} }
+  throw new Pular('resposta não veio em JSON válido');
 }
 
-async function chamarGemini({ model, system, content, tool }) {
-  const maxTokens = 60000; // no Gemini o "raciocínio" também conta nesse limite
-  const key = process.env.GEMINI_API_KEY;
+const instrucaoJSON = tool => `\n\nResponda SOMENTE com um único objeto JSON válido (sem texto antes ou depois, sem \`\`\`) que siga exatamente este esquema JSON:\n${JSON.stringify(tool.input_schema)}`;
+
+async function comTempo(url, opts, ms = 280000) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
+  try { return await fetch(url, { ...opts, signal: ctl.signal }); }
+  catch (e) { throw new Pular(e.name === 'AbortError' ? 'demorou demais' : 'sem conexão'); }
+  finally { clearTimeout(t); }
+}
+
+async function checar(res) {
+  if (res.ok) return;
+  const txt = (await res.text()).slice(0, 300);
+  if ([408, 409, 413, 422, 429, 500, 502, 503, 504, 529].includes(res.status) || res.status === 400 && /token|context|length|too large|quota/i.test(txt)) throw new Pular(`erro ${res.status}`);
+  throw new Pular(`erro ${res.status}: ${txt}`);
+}
+
+// ---------- APIs no formato OpenAI (Mistral, OpenRouter) ----------
+async function chamarOpenAI(p, { system, content, tool, maxTokens }) {
+  const partes = content.map(c => c.type === 'image'
+    ? { type: 'image_url', image_url: p.imagemTexto ? `data:${c.source.media_type};base64,${c.source.data}` : { url: `data:${c.source.media_type};base64,${c.source.data}` } }
+    : { type: 'text', text: c.text });
+  const res = await comTempo(p.url, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${p.chave}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: p.model, max_tokens: maxTokens, temperature: 0.4,
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'system', content: system + instrucaoJSON(tool) }, { role: 'user', content: partes }],
+    }),
+  });
+  await checar(res);
+  const j = await res.json();
+  const ch = j.choices?.[0];
+  if (!ch) throw new Pular('sem resposta');
+  if (ch.finish_reason === 'length') throw new Pular('resposta cortada');
+  const msg = ch.message?.content;
+  return extrairJSON(Array.isArray(msg) ? msg.map(x => x.text || '').join('') : msg);
+}
+
+// ---------- API do Google (Gemma 4) ----------
+async function chamarGemini(p, { system, content, tool, maxTokens }) {
   const parts = content.map(c => c.type === 'image'
     ? { inline_data: { mime_type: c.source.media_type, data: c.source.data } }
     : { text: c.text });
-  const corpo = (comEsquema) => ({
-    systemInstruction: { parts: [{ text: system + (comEsquema ? '' : `\n\nResponda SOMENTE com um JSON válido que siga este esquema:\n${JSON.stringify(tool.input_schema)}`) }] },
-    contents: [{ role: 'user', parts }],
-    generationConfig: { responseMimeType: 'application/json', maxOutputTokens: maxTokens, ...(comEsquema ? { responseSchema: esquemaGemini(tool.input_schema) } : {}) },
-  });
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-  const enviar = async (comEsquema) => fetch(url, { method: 'POST', headers: { 'x-goog-api-key': key, 'content-type': 'application/json' }, body: JSON.stringify(corpo(comEsquema)) });
-  let res = await enviar(true);
-  if (res.status === 400) res = await enviar(false); // esquema recusado: tenta com o esquema no texto
-  if (res.status === 429) throw new ErroIA('O limite gratuito da IA foi atingido por agora. Espere alguns minutos e tente de novo (se continuar, o limite do dia acabou e volta amanhã).');
-  if (!res.ok) throw new ErroIA(`A IA respondeu com erro (${res.status}): ${(await res.text()).slice(0, 300)}`);
-  const j = await res.json();
-  const cand = j.candidates?.[0];
-  if (!cand) throw new ErroIA('A IA não respondeu' + (j.promptFeedback?.blockReason ? ` (bloqueio: ${j.promptFeedback.blockReason})` : '') + '. Tente de novo.');
-  if (cand.finishReason === 'MAX_TOKENS') throw new ErroIA('A resposta da IA ficou grande demais e foi cortada. Tente de novo com menos páginas de uma vez.');
-  const txt = (cand.content?.parts || []).filter(p => p.text && !p.thought).map(p => p.text).join('');
-  try { return JSON.parse(txt.replace(/^```(?:json)?\s*|\s*```$/g, '')); }
-  catch { throw new ErroIA('A IA devolveu uma resposta incompleta. Tente de novo.'); }
-}
-
-// ---------- Claude ----------
-async function chamarClaude({ model, system, content, tool, maxTokens = 16000 }) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new ErroIA('A chave da IA ainda não foi configurada (GEMINI_API_KEY na Vercel).');
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await comTempo(`https://generativelanguage.googleapis.com/v1beta/models/${p.model}:generateContent`, {
     method: 'POST',
-    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    headers: { 'x-goog-api-key': p.chave, 'content-type': 'application/json' },
     body: JSON.stringify({
-      model, max_tokens: maxTokens, system, stream: true,
-      messages: [{ role: 'user', content }],
-      tools: [tool], tool_choice: { type: 'tool', name: tool.name },
+      systemInstruction: { parts: [{ text: system + instrucaoJSON(tool) }] },
+      contents: [{ role: 'user', parts }],
+      generationConfig: { maxOutputTokens: Math.max(maxTokens, 16000), temperature: 0.4 },
     }),
   });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new ErroIA(`A IA respondeu com erro (${res.status}): ${txt.slice(0, 300)}`);
-  }
-  // Lê o stream (SSE) e junta o JSON da ferramenta
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let buf = '', json = '', stop = null;
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf('\n\n')) >= 0) {
-      const ev = buf.slice(0, i); buf = buf.slice(i + 2);
-      const line = ev.split('\n').find(l => l.startsWith('data: '));
-      if (!line) continue;
-      let d; try { d = JSON.parse(line.slice(6)); } catch { continue; }
-      if (d.type === 'content_block_delta' && d.delta?.type === 'input_json_delta') json += d.delta.partial_json;
-      if (d.type === 'message_delta' && d.delta?.stop_reason) stop = d.delta.stop_reason;
-      if (d.type === 'error') throw new ErroIA('A IA teve um problema: ' + (d.error?.message || 'erro desconhecido'));
+  await checar(res);
+  const j = await res.json();
+  const cand = j.candidates?.[0];
+  if (!cand) throw new Pular('sem resposta' + (j.promptFeedback?.blockReason ? ` (${j.promptFeedback.blockReason})` : ''));
+  if (cand.finishReason === 'MAX_TOKENS') throw new Pular('resposta cortada');
+  return extrairJSON((cand.content?.parts || []).filter(x => x.text && !x.thought).map(x => x.text).join(''));
+}
+
+async function chamarIA({ system, content, tool, maxTokens = 16000 }) {
+  const ps = provedores(content.some(c => c.type === 'image'));
+  if (!ps.length) throw new ErroIA('A chave da IA ainda não foi configurada. Coloque MISTRAL_API_KEY (ou GEMINI_API_KEY) nas variáveis da Vercel.');
+  const falhas = [];
+  for (const p of ps) {
+    try {
+      const r = p.tipo === 'gemini' ? await chamarGemini(p, { system, content, tool, maxTokens }) : await chamarOpenAI(p, { system, content, tool, maxTokens });
+      const faltando = (tool.input_schema.required || []).filter(k => tool.input_schema.properties[k]?.type === 'array' && !Array.isArray(r?.[k]));
+      if (faltando.length) throw new Pular(`resposta sem ${faltando.join(', ')}`);
+      return r;
+    } catch (e) {
+      if (!(e instanceof Pular)) throw e;
+      falhas.push(`${p.nome}: ${e.message}`);
+      console.warn('[ia]', p.nome, e.message);
     }
   }
-  if (stop === 'max_tokens') throw new ErroIA('A resposta da IA ficou grande demais e foi cortada. Tente de novo com menos páginas de uma vez.');
-  try { return JSON.parse(json); } catch { throw new ErroIA('A IA devolveu uma resposta incompleta. Tente de novo.'); }
+  throw new ErroIA('As IAs gratuitas não conseguiram responder agora (limite atingido ou fora do ar). Espere alguns minutos e tente de novo. Detalhe: ' + falhas.join(' · '));
 }
 
 // ---------- esquemas ----------
@@ -181,7 +193,7 @@ const TOOL_REVISOES = {
 // ---------- tarefas ----------
 export async function transcreverPagina({ imagemBase64, mediaType, turma, materia, dica }) {
   return chamarIA({
-    nivel: 'rapido', system: REGRAS_TRANSCRICAO, tool: TOOL_PAGINA, maxTokens: 8000,
+    system: REGRAS_TRANSCRICAO, tool: TOOL_PAGINA, maxTokens: 8000,
     content: [
       { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imagemBase64 } },
       { type: 'text', text: `Material da turma ${turma}, matéria ${materia}.${dica ? ' Observação da professora: ' + dica : ''}\nTranscreva esta página fielmente.` },
@@ -191,7 +203,7 @@ export async function transcreverPagina({ imagemBase64, mediaType, turma, materi
 
 export async function revisarMaterial({ resumo, turma, materia, descricao }) {
   return chamarIA({
-    nivel: USA_GEMINI ? 'rapido' : 'principal', system: REGRAS_ANEXO, tool: TOOL_ANEXO, maxTokens: 8000,
+    system: REGRAS_ANEXO, tool: TOOL_ANEXO, maxTokens: 8000,
     content: [{ type: 'text', text: `Turma: ${turma}. Matéria: ${materia}.${descricao ? '\nO que a professora disse sobre este material: ' + descricao : ''}\n\nTRANSCRIÇÃO DAS PÁGINAS:\n\n${resumo}` }],
   });
 }
@@ -217,7 +229,7 @@ export async function gerarProva(ctx, { atual, ajuste } = {}) {
   } else {
     txt += `\n\nMonte a prova agora.`;
   }
-  return chamarIA({ nivel: 'principal', system: REGRAS_PROVA, tool: TOOL_PROVA, maxTokens: 20000, content: [{ type: 'text', text: txt }] });
+  return chamarIA({ system: REGRAS_PROVA, tool: TOOL_PROVA, maxTokens: 20000, content: [{ type: 'text', text: txt }] });
 }
 
 export async function gerarRevisoes(ctx, { prova, proibidos, atual, ajuste } = {}) {
@@ -226,5 +238,5 @@ export async function gerarRevisoes(ctx, { prova, proibidos, atual, ajuste } = {
   txt += `\n===== TERMOS PROIBIDOS NAS REVISÕES (perguntas e respostas) =====\n${proibidos.join(' | ')}\n`;
   if (atual) txt += `\n===== REVISÕES ATUAIS (JSON) =====\n${JSON.stringify(atual)}\n\n${REGRAS_AJUSTE}\nAJUSTE PEDIDO:\n${ajuste}`;
   else txt += `\nMonte as 8 fichas agora.`;
-  return chamarIA({ nivel: 'principal', system: REGRAS_REVISOES, tool: TOOL_REVISOES, maxTokens: 12000, content: [{ type: 'text', text: txt }] });
+  return chamarIA({ system: REGRAS_REVISOES, tool: TOOL_REVISOES, maxTokens: 12000, content: [{ type: 'text', text: txt }] });
 }
