@@ -351,11 +351,12 @@ export async function planejarProva(ctx, { mapa, quantas = 10 }) {
 const textoCurto = q => [q.enunciado, q.texto, ...(q.itens || []).map(it => [it.texto, it.antes, it.palavra, it.depois, ...(it.opcoes || [])].filter(Boolean).join(' ')), ...(q.quadro || [])]
   .filter(Boolean).join(' · ').replace(/\s+/g, ' ').slice(0, 450);
 
-export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas, instrucao }) {
+export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas, instrucao, ressalvas }) {
   // Sem histórico aqui: ele serve para o plano não repetir provas antigas, e repeti-lo em cada
   // questão era mandar todas as provas anteriores dez vezes.
   const txt = blocoContexto({ ...ctx, conteudos: [], historico: '' })
     + `\n===== TRECHO DA APOSTILA PARA ESTE LOTE =====\n${trecho}\n`
+    + (ressalvas ? `\n===== PONTOS A CONFERIR NESSAS PÁGINAS (a apostila tem erros aqui; NÃO COBRAR o que está marcado "não cobrar") =====\n${ressalvas}\n` : '')
     // As RESPOSTAS das questões já escritas vão junto: antes iam só os enunciados, e a questão 2
     // pôs no quadro "Primeiro Reinado", que era a resposta da questão 1.
     + (jaFeitas.length ? `\n===== QUESTÕES JÁ ESCRITAS NESTA PROVA =====\n${jaFeitas.map((q, i) => `${i + 1}. [${q.tipo}] ${textoCurto(q)} — respostas: ${(q.respostas_chave || []).join(', ') || '—'}`).join('\n')}\n`
@@ -376,9 +377,10 @@ export async function planejarRevisoes(ctx, { mapa, prova, proibidos, quantas = 
   return chamarIA({ system: REGRAS_REVISOES, tool: TOOL_PLANO_REVISOES, maxTokens: 2500, content: [{ type: 'text', text: txt }] });
 }
 
-export async function escreverFichas(ctx, { lote, trecho, proibidos, jaFeitas, instrucao }) {
+export async function escreverFichas(ctx, { lote, trecho, proibidos, jaFeitas, instrucao, ressalvas }) {
   const txt = blocoContexto({ ...ctx, conteudos: [] })
     + `\n===== TRECHO DA APOSTILA PARA ESTE LOTE =====\n${trecho}\n`
+    + (ressalvas ? `\n===== PONTOS A CONFERIR NESSAS PÁGINAS (NÃO COBRAR o que está marcado "não cobrar") =====\n${ressalvas}\n` : '')
     + `\n===== TERMOS PROIBIDOS (nem nas perguntas nem nas respostas) =====\n${proibidos.join(' | ')}\n`
     + (jaFeitas.length ? `\n===== PERGUNTAS JÁ FEITAS (não repetir) =====\n${jaFeitas.join('\n')}\n` : '')
     + (instrucao ? `\n===== PEDIDO PARA ESTA FICHA =====\n${instrucao}\n` : '')

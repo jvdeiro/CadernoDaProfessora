@@ -96,6 +96,32 @@ export function trechoDe(conteudos, paginas, assunto) {
   return escolhidas.map(p => p.texto).join('\n\n').slice(0, 9000);
 }
 
+// Linhas do anexo ("pontos a conferir" / "não cobrar") das páginas pedidas. O anexo é uma tabela
+// markdown cuja primeira coluna é a página. Sem isto, a prova cobrava justamente os erros da
+// apostila (ex.: "Retirada da Laguna = maior combate campal", marcado como NÃO COBRAR).
+export function anexoDe(conteudos, paginas, assunto) {
+  const quer = numeros(paginas);
+  if (!quer.size && assunto) for (const n of numeros(paginasDoAssunto(conteudos, assunto))) quer.add(n);
+  if (!quer.size) return '';
+  const bate = (de, ate) => { for (let n = de; n <= ate; n++) if (quer.has(n)) return true; return false; };
+  const linhas = [];
+  for (const c of conteudos) {
+    let bloco = false;   // dentro de um bloco "**p. 38**" cujas páginas interessam
+    for (const l of String(c.anexo_erros_md || '').split('\n')) {
+      const t = l.trim();
+      // formato tabela: | 31 | ... |   ou   | 15-17 | ... |
+      const tab = t.match(/^\|\s*(?:dig\.|fís\.|p\.)?\s*(\d+)(?:\s*[-–]\s*(\d+))?\s*\|/i);
+      if (tab) { bloco = false; if (bate(+tab[1], tab[2] ? +tab[2] : +tab[1])) linhas.push(t); continue; }
+      // formato bloco: "**p. 38**", "**p. 24** – título", "- Página 64: ..."
+      const cab = t.match(/^(?:\*\*|-\s*)?(?:p\.|Página|página)\s*(\d+)(?:\s*[-–]\s*(\d+))?/);
+      if (cab) { bloco = bate(+cab[1], cab[2] ? +cab[2] : +cab[1]); if (bloco) linhas.push(t); continue; }
+      if (/^(#|---|\|)/.test(t) || t === '') { if (t.startsWith('#') || t.startsWith('---')) bloco = false; continue; }
+      if (bloco) linhas.push(t);
+    }
+  }
+  return linhas.join('\n').slice(0, 4000);
+}
+
 const lotes = (arr, tam) => Array.from({ length: Math.ceil(arr.length / tam) }, (_, i) => arr.slice(i * tam, i * tam + tam));
 
 // Roda as etapas que faltam, salvando cada uma. Devolve { pronto } ou { pendente, feitas, total, etapa }.
@@ -188,7 +214,8 @@ export async function gerarProvaEtapas(sb, id, { av, ctx, conteudos, prazo = Dat
     itens: plano => ajustarPontos((plano.questoes || []).slice(0, quantas)).map((q, i) => ({ ...q, n: i + 1 })),
     planejar: () => planejarProva(ctx, { mapa, quantas }),
     escrever: async (lote, jaFeitas) => {
-      const r = await escreverQuestoes(ctx, { plano: estado.plano, lote, jaFeitas, trecho: trechoDe(conteudos, lote.map(q => q.paginas).join(' '), lote.map(q => q.assunto).join(' ')) });
+      const pags = lote.map(q => q.paginas).join(' '), assunto = lote.map(q => q.assunto).join(' ');
+      const r = await escreverQuestoes(ctx, { plano: estado.plano, lote, jaFeitas, trecho: trechoDe(conteudos, pags, assunto), ressalvas: anexoDe(conteudos, pags, assunto) });
       // uma questão por lote, marcada com o número do plano (para a pontuação casar mesmo se algum lote faltar)
       return (r.questoes || []).slice(0, 1).map(q => ({ ...q, n: lote[0].n }));
     },
@@ -226,6 +253,7 @@ export async function gerarRevisoesEtapas(sb, id, { av, ctx, conteudos, prazo = 
     escrever: async (lote, jaFeitas) => {
       const r = await escreverFichas(ctx, {
         lote, proibidos, trecho: trechoDe(conteudos, lote.map(f => f.paginas).join(' '), lote.map(f => f.tema).join(' ')),
+        ressalvas: anexoDe(conteudos, lote.map(f => f.paginas).join(' '), lote.map(f => f.tema).join(' ')),
         jaFeitas: jaFeitas.flatMap(f => (f.perguntas || []).map(p => p.texto)),
       });
       return (r.fichas || []).slice(0, 1);
@@ -290,6 +318,7 @@ async function retocarEtapas(sb, id, { av, ctx, conteudos, prazo, tipo }) {
           plano: { questoes: lista }, jaFeitas: outros,
           lote: [{ n: alvo.n, tipo: velho.tipo, assunto: velho.enunciado, pontos: velho.pontos }],
           trecho: trechoDe(conteudos, (velho.gabarito || []).join(' '), velho.enunciado),
+          ressalvas: anexoDe(conteudos, (velho.gabarito || []).join(' '), velho.enunciado),
           instrucao: `Reescreva a questão ${alvo.n}. Motivo: ${alvo.instrucao}`,
         });
         return (r.questoes || []).slice(0, 1).map(q => ({ ...q, n: alvo.n, pontos: velho.pontos }));
@@ -297,6 +326,7 @@ async function retocarEtapas(sb, id, { av, ctx, conteudos, prazo, tipo }) {
       const r = await escreverFichas(ctx, {
         lote: [{ tema: velho.tema }], proibidos,
         trecho: trechoDe(conteudos, (velho.perguntas || []).map(p => p.resposta).join(' '), velho.tema),
+        ressalvas: anexoDe(conteudos, (velho.perguntas || []).map(p => p.resposta).join(' '), velho.tema),
         jaFeitas: outros.flatMap(f => (f.perguntas || []).map(p => p.texto)),
         instrucao: `Reescreva esta ficha. Motivo: ${alvo.instrucao}`,
       });
