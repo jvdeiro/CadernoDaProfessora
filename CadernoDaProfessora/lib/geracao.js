@@ -317,16 +317,19 @@ async function retocarEtapas(sb, id, { av, ctx, conteudos, prazo, tipo }) {
         const r = await escreverQuestoes(ctx, {
           plano: { questoes: lista }, jaFeitas: outros,
           lote: [{ n: alvo.n, tipo: velho.tipo, assunto: velho.enunciado, pontos: velho.pontos }],
-          trecho: trechoDe(conteudos, (velho.gabarito || []).join(' '), velho.enunciado),
-          ressalvas: anexoDe(conteudos, (velho.gabarito || []).join(' '), velho.enunciado),
+          trecho: trechoDe(conteudos, (velho.gabarito || []).join(' ') + ' ' + (alvo.instrucao.match(/p(?:ágina|ág|ag)?s?\.?\s*\d+(?:\s*(?:[-–]|a)\s*\d+)?/gi) || []).join(' '), velho.enunciado),
+          ressalvas: anexoDe(conteudos, (velho.gabarito || []).join(' ') + ' ' + (alvo.instrucao.match(/p(?:ágina|ág|ag)?s?\.?\s*\d+(?:\s*(?:[-–]|a)\s*\d+)?/gi) || []).join(' '), velho.enunciado),
           instrucao: `Reescreva a questão ${alvo.n}. Motivo: ${alvo.instrucao}`,
         });
         return (r.questoes || []).slice(0, 1).map(q => ({ ...q, n: alvo.n, pontos: velho.pontos }));
       }
+      // Páginas: as da ficha antiga + as que o pedido citar ("troque a ficha 4 por uma sobre a abolição, p. 26-28").
+      // Sem isso o pedido de trocar o tema vinha sem o conteúdo do tema novo.
+      const pagsFicha = (velho.perguntas || []).map(p => p.resposta).join(' ') + ' ' + (alvo.instrucao.match(/p(?:ágina|ág|ag)?s?\.?\s*\d+(?:\s*(?:[-–]|a)\s*\d+)?/gi) || []).join(' ');
       const r = await escreverFichas(ctx, {
         lote: [{ tema: velho.tema }], proibidos,
-        trecho: trechoDe(conteudos, (velho.perguntas || []).map(p => p.resposta).join(' '), velho.tema),
-        ressalvas: anexoDe(conteudos, (velho.perguntas || []).map(p => p.resposta).join(' '), velho.tema),
+        trecho: trechoDe(conteudos, pagsFicha, velho.tema),
+        ressalvas: anexoDe(conteudos, pagsFicha, velho.tema),
         jaFeitas: outros.flatMap(f => (f.perguntas || []).map(p => p.texto)),
         instrucao: `Reescreva esta ficha. Motivo: ${alvo.instrucao}`,
       });
