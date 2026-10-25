@@ -10,7 +10,6 @@ export default function Topo() {
     <header className="mast">
       <Link href="/" className="logo" aria-label="Caderno da Professora, início">
         <b>Caderno da Professora</b>
-        <small>CED Proativo · Escola Pirralho</small>
       </Link>
       <span className="data" suppressHydrationWarning>{hoje}</span>
     </header>
