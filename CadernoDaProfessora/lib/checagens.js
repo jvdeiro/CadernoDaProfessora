@@ -57,7 +57,7 @@ export function termosProibidos(prova) {
   return [...t].map(x => String(x).trim()).filter(x => x.length >= 3 && !/^[VFX]$/i.test(x));
 }
 
-export function checarRevisoes(rev, prova) {
+export function checarRevisoes(rev, prova, quantas = 8) {
   const proibidos = termosProibidos(prova);
   const problemas = [];
   const ngProva = ngramas(textoProva(prova), 5);
@@ -70,6 +70,6 @@ export function checarRevisoes(rev, prova) {
       if (iguais.length) problemas.push(`Ficha ${i + 1}, pergunta ${'abcdef'[j]}: repete um trecho da prova ("${iguais[0]}").`);
     });
   });
-  if ((rev.fichas || []).length !== 8) problemas.push(`São ${(rev.fichas || []).length} fichas; o formato pede 8.`);
+  if ((rev.fichas || []).length !== quantas) problemas.push(`São ${(rev.fichas || []).length} fichas; o formato pede ${quantas}.`);
   return { ok: problemas.length === 0, problemas, proibidos };
 }

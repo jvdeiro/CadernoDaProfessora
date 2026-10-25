@@ -3,9 +3,14 @@
 //   Fotos:  Gemma 4 pela API do Google (GEMINI_API_KEY) → Gemma 4 / Nemotron VL pelo OpenRouter (OPENROUTER_API_KEY)
 //   Textos: Gemma 4 31B / Nemotron 3 Ultra pelo OpenRouter → Gemma 4 pelo Google
 //   (MISTRAL_API_KEY entra na frente se existir — o plano Free da Mistral não libera API hoje.)
-import { REGRAS_TRANSCRICAO, REGRAS_ANEXO, REGRAS_PROVA, REGRAS_QUESTAO, regrasQuestaoDe, REGRAS_REVISOES, REGRAS_AJUSTE } from './regras.js';
+import { REGRAS_TRANSCRICAO, REGRAS_ANEXO, REGRAS_PROVA, REGRAS_QUESTAO, regrasQuestaoDe, REGRAS_REVISOES, REGRAS_FICHA, REGRAS_AJUSTE } from './regras.js';
 
 export class ErroIA extends Error {}
+
+// Registro de cada chamada (tokens, tempo, erro) — para medir o consumo em vez de supor.
+// O robô da fila descarrega isso no banco (tabela ia_uso) ao fim de cada rodada.
+let usos = [], ultimoUso = null;
+export function tirarUsos() { const u = usos; usos = []; return u; }
 class Pular extends Error {} // falha que justifica tentar o próximo provedor
 
 const lista = (v, padrao) => (v || padrao).split(',').map(x => x.trim()).filter(Boolean);
@@ -83,6 +88,7 @@ async function chamarOpenAI(p, { system, content, tool, maxTokens }) {
   });
   await checar(res);
   const j = await res.json();
+  ultimoUso = { entrada: j.usage?.prompt_tokens, saida: j.usage?.completion_tokens, pensando: j.usage?.completion_tokens_details?.reasoning_tokens };
   const ch = j.choices?.[0];
   if (!ch) throw new Pular('sem resposta');
   if (ch.finish_reason === 'length') throw new Pular('resposta cortada');
@@ -120,6 +126,7 @@ async function chamarGemini(p, { system, content, tool, maxTokens }) {
   }
   await checar(res, p);
   const j = await res.json();
+  { const u = j.usageMetadata || {}; ultimoUso = { entrada: u.promptTokenCount, saida: u.candidatesTokenCount, pensando: u.thoughtsTokenCount }; }
   const cand = j.candidates?.[0];
   if (!cand) throw new Pular('sem resposta' + (j.promptFeedback?.blockReason ? ` (${j.promptFeedback.blockReason})` : ''));
   const partes = cand.content?.parts || [];
@@ -140,6 +147,7 @@ async function chamarIA({ system, content, tool, maxTokens = 16000, grande = fal
   for (const [idx, p] of ps.entries()) {
     if (restaDoPrazo() < 8000) { falhas.push('tempo da rodada esgotado'); break; }
     const t0 = Date.now();
+    ultimoUso = null;
     try {
       let r;
       if (p.tipo === 'gemini') {
@@ -153,10 +161,12 @@ async function chamarIA({ system, content, tool, maxTokens = 16000, grande = fal
       } else r = await chamarOpenAI(p, { system, content, tool, maxTokens });
       const faltando = (tool.input_schema.required || []).filter(k => tool.input_schema.properties[k]?.type === 'array' && !Array.isArray(r?.[k]));
       if (faltando.length) throw new Pular(`resposta sem ${faltando.join(', ')}`);
+      usos.push({ etapa: tool.name, provedor: p.nome, ms: Date.now() - t0, ...(ultimoUso || {}), ok: true });
       return r;
     } catch (e) {
       if (!(e instanceof Pular)) throw e;
       falhas.push(`${p.nome}: ${e.message} (${Math.round((Date.now() - t0) / 1000)}s)`);
+      usos.push({ etapa: tool.name, provedor: p.nome, ms: Date.now() - t0, ...(ultimoUso || {}), ok: false, erro: String(e.message).slice(0, 300) });
       console.warn('[ia]', p.nome, e.message, Math.round((Date.now() - t0) / 1000) + 's');
     }
   }
@@ -324,12 +334,14 @@ const TOOL_FICHAS = {
 };
 
 // Plano da prova: recebe só os tópicos e o anexo, nunca o resumo inteiro.
-export async function planejarProva(ctx, { mapa }) {
+export async function planejarProva(ctx, { mapa, quantas = 10 }) {
   const txt = blocoContexto({ ...ctx, conteudos: [] })
     + `\n===== ASSUNTOS DISPONÍVEIS (use as páginas para localizar o conteúdo depois) =====\n${mapa}\n`
-    + `\nMonte APENAS O PLANO da prova agora: a frase de abertura e a lista de questões previstas.`
+    + `\nMonte APENAS O PLANO da prova agora: a frase de abertura e a lista de EXATAMENTE ${quantas} questões.`
+    + `\nEspalhe as questões por assuntos DIFERENTES do mapa, cobrindo os capítulos do começo ao fim — nada de concentrar tudo num assunto só.`
+    + `\nEm "paginas", copie as páginas do assunto escolhido, exatamente como aparecem no mapa.`
     + `\nPara cada questão diga o tipo, o assunto, as páginas de onde sai e a pontuação.`
-    + `\nA soma das pontuações TEM que dar exatamente 10,0. Use pelo menos 7 tipos diferentes e não repita o mesmo tipo em questões seguidas.`
+    + `\nA soma das pontuações TEM que dar exatamente 10,0. Use tipos variados (pelo menos ${Math.min(7, quantas)} diferentes) e não repita o mesmo tipo em questões seguidas.`
     + `\nNÃO escreva os enunciados nem as alternativas ainda.`;
   return chamarIA({ system: REGRAS_PROVA, tool: TOOL_PLANO_PROVA, maxTokens: 4000, content: [{ type: 'text', text: txt }] });
 }
@@ -339,7 +351,7 @@ export async function planejarProva(ctx, { mapa }) {
 const textoCurto = q => [q.enunciado, q.texto, ...(q.itens || []).map(it => [it.texto, it.antes, it.palavra, it.depois, ...(it.opcoes || [])].filter(Boolean).join(' ')), ...(q.quadro || [])]
   .filter(Boolean).join(' · ').replace(/\s+/g, ' ').slice(0, 450);
 
-export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas }) {
+export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas, instrucao }) {
   // Sem histórico aqui: ele serve para o plano não repetir provas antigas, e repeti-lo em cada
   // questão era mandar todas as provas anteriores dez vezes.
   const txt = blocoContexto({ ...ctx, conteudos: [], historico: '' })
@@ -348,28 +360,47 @@ export async function escreverQuestoes(ctx, { plano, lote, trecho, jaFeitas }) {
     // pôs no quadro "Primeiro Reinado", que era a resposta da questão 1.
     + (jaFeitas.length ? `\n===== QUESTÕES JÁ ESCRITAS NESTA PROVA =====\n${jaFeitas.map((q, i) => `${i + 1}. [${q.tipo}] ${textoCurto(q)} — respostas: ${(q.respostas_chave || []).join(', ') || '—'}`).join('\n')}\n`
       + `\nNas duas direções: (1) nenhuma dessas respostas pode aparecer na sua questão (enunciado, opções, quadro); (2) a resposta da SUA questão não pode estar escrita nos textos acima. Escolha outro fato da apostila se precisar. Não repita assunto nem formato.\n` : '')
+    + (instrucao ? `\n===== PEDIDO PARA ESTA QUESTÃO (seguir) =====\n${instrucao}\n` : '')
     + `\n===== A QUESTÃO QUE VOCÊ DEVE ESCREVER AGORA =====\n`
     + lote.map(q => `Questão ${q.n} de ${plano?.questoes?.length || 10}: tipo "${q.tipo}", assunto "${q.assunto}", vale ${q.pontos}.`).join('\n')
     + `\n\nEscreva SÓ essa questão, por inteiro (enunciado, itens, gabarito, pontuacao e respostas_chave). Mantenha exatamente o tipo e a pontuação indicados. Devolva "questoes" com um único item.`;
   return chamarIA({ system: regrasQuestaoDe(lote[0]?.tipo), tool: TOOL_QUESTOES, maxTokens: 8000, content: [{ type: 'text', text: txt }] });
 }
 
-export async function planejarRevisoes(ctx, { mapa, prova, proibidos }) {
+export async function planejarRevisoes(ctx, { mapa, prova, proibidos, quantas = 8 }) {
   const txt = blocoContexto({ ...ctx, conteudos: [] })
     + `\n===== ASSUNTOS DISPONÍVEIS =====\n${mapa}\n`
     + `\n===== RESUMO DA PROVA (as revisões não podem repetir nada disto) =====\n${(prova.resumo_questoes || []).join('\n')}\n`
     + `\n===== TERMOS PROIBIDOS =====\n${proibidos.join(' | ')}\n`
-    + `\nMonte APENAS O PLANO: o comando das fichas e os 8 temas, com as páginas de cada um. NÃO escreva as perguntas ainda.`;
+    + `\nMonte APENAS O PLANO: o comando das fichas e EXATAMENTE ${quantas} temas, de assuntos diferentes, com as páginas de cada um copiadas do mapa. NÃO escreva as perguntas ainda.`;
   return chamarIA({ system: REGRAS_REVISOES, tool: TOOL_PLANO_REVISOES, maxTokens: 2500, content: [{ type: 'text', text: txt }] });
 }
 
-export async function escreverFichas(ctx, { lote, trecho, proibidos, jaFeitas }) {
+export async function escreverFichas(ctx, { lote, trecho, proibidos, jaFeitas, instrucao }) {
   const txt = blocoContexto({ ...ctx, conteudos: [] })
     + `\n===== TRECHO DA APOSTILA PARA ESTE LOTE =====\n${trecho}\n`
     + `\n===== TERMOS PROIBIDOS (nem nas perguntas nem nas respostas) =====\n${proibidos.join(' | ')}\n`
     + (jaFeitas.length ? `\n===== PERGUNTAS JÁ FEITAS (não repetir) =====\n${jaFeitas.join('\n')}\n` : '')
-    + `\n===== ESCREVA AGORA SÓ ESTAS FICHAS =====\n${lote.map(f => `- Ficha "${f.tema}" (páginas ${f.paginas || '—'})`).join('\n')}`;
-  return chamarIA({ system: REGRAS_REVISOES, tool: TOOL_FICHAS, maxTokens: 2000, content: [{ type: 'text', text: txt }] });
+    + (instrucao ? `\n===== PEDIDO PARA ESTA FICHA =====\n${instrucao}\n` : '')
+    + `\n===== A FICHA QUE VOCÊ DEVE ESCREVER AGORA =====\n${lote.map(f => `Ficha "${f.tema}" (páginas ${f.paginas || '—'})`).join('\n')}\nDevolva "fichas" com um único item, com 4 perguntas.`;
+  return chamarIA({ system: REGRAS_FICHA, tool: TOOL_FICHAS, maxTokens: 3000, content: [{ type: 'text', text: txt }] });
+}
+
+const TOOL_ESCOLHA = {
+  name: 'escolher_itens',
+  description: 'Diz quais itens precisam mudar para atender ao pedido.',
+  input_schema: { type: 'object', properties: {
+    numeros: { type: 'array', items: { type: 'integer' }, description: 'Números dos itens a reescrever (1 = primeiro).' },
+    instrucao: { type: 'string', description: 'O que mudar, em uma frase, para quem vai reescrever cada item.' },
+  }, required: ['numeros', 'instrucao'] },
+};
+// Recebe a lista curta (uma linha por questão/ficha) e o pedido; devolve só os números. Resposta minúscula.
+export async function escolherItens({ pedido, lista, oQue = 'questões' }) {
+  return chamarIA({
+    system: `Você ajuda uma professora a ajustar ${oQue} já prontas. Diga quais itens precisam ser reescritos para atender ao pedido dela — só os necessários.`,
+    tool: TOOL_ESCOLHA, maxTokens: 600,
+    content: [{ type: 'text', text: `${oQue.toUpperCase()} ATUAIS:\n${lista}\n\nPEDIDO DA PROFESSORA:\n${pedido}` }],
+  });
 }
 
 export async function gerarProva(ctx, { atual, ajuste } = {}) {

@@ -168,3 +168,22 @@ export function regraDoTipo(tipo) {
 
 // Prompt de uma questão, montado com a regra de UM tipo só.
 export const regrasQuestaoDe = tipo => REGRAS_QUESTAO.replace(TIPOS_QUESTAO, regraDoTipo(tipo));
+
+// Prompt de UMA ficha de revisão. O REGRAS_REVISOES manda "montar as REVISÕES... 8 fichas" —
+// usado para escrever uma ficha só, faria o modelo tentar escrever as oito (o mesmo erro que
+// travou a prova: pedir o todo a cada parte).
+export const REGRAS_FICHA = `
+${CONTEXTO_ESCOLA}
+
+TAREFA: escrever UMA ÚNICA ficha de revisão, no tema pedido. Outras chamadas cuidam das demais fichas.
+
+Como é a ficha:
+- Um tema curto (o que foi pedido) e 4 perguntas abertas, curtas e diretas, para o aluno responder no caderno.
+- Linguagem simples, para a idade da turma. Cada pergunta cabe em 1 ou 2 linhas.
+- Use SOMENTE o trecho da apostila enviado. Nada de fora. Não use os trechos de "Pontos a conferir".
+- Para cada pergunta, "resposta": a resposta esperada, curta, com a página entre colchetes, ex.: "Clube da Resistência [dig. p. 63]".
+
+REGRA RÍGIDA: a revisão NÃO pode ter NADA igual à prova. Nenhum termo proibido pode aparecer nas perguntas NEM nas respostas.
+Treine o mesmo assunto com OUTROS FATOS do trecho. Não repita perguntas das fichas já escritas.
+Devolva "fichas" com um único item.
+`.trim();

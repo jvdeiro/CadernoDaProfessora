@@ -2,12 +2,17 @@
 // Motivo: uma chamada só mandava os 78 mil caracteres do resumo e pedia 20 mil tokens de volta —
 // as IAs gratuitas estouravam o tempo e tudo se perdia. Agora é um plano leve e lotes pequenos,
 // cada um recebendo só o trecho de que precisa e ficando salvo assim que fica pronto.
-import { planejarProva, escreverQuestoes, planejarRevisoes, escreverFichas, definirPrazo } from './ia.js';
+import { planejarProva, escreverQuestoes, planejarRevisoes, escreverFichas, escolherItens, definirPrazo } from './ia.js';
 import { checarProva, checarRevisoes, termosProibidos } from './checagens.js';
 
 const POR_LOTE = 1;          // UMA questão (ou ficha) por chamada: as IAs gratuitas estouram o tempo
                              // com pedidos maiores. Mais chamadas, cada uma rápida e que quase sempre passa.
 const MAX_TENTATIVAS = 3;    // um lote teimoso não trava a avaliação inteira
+const RESPIRO_MS = 5000;     // pausa entre uma chamada e outra, para não estourar o limite por minuto
+const dormir = ms => new Promise(r => setTimeout(r, ms));
+// Tamanho do material. No modo de teste (avaliacoes.teste) é bem menor, para validar o caminho
+// inteiro gastando o mínimo de IA: 3 questões e 2 fichas em vez de 10 e 8.
+export const tamanho = av => (av?.teste ? { questoes: 3, fichas: 2 } : { questoes: 10, fichas: 8 });
 const n = s => { const m = String(s || '').match(/\d+/); return m ? parseInt(m[0]) : null; };
 const pts = s => parseFloat(String(s ?? '').replace(',', '.')) || 0;
 const fmt = v => v.toFixed(1).replace('.', ',');
@@ -143,6 +148,7 @@ async function emEtapas(sb, id, { prazo, chave, estado, itens, planejar, escreve
         return { pendente: true, feitas: await salvar(), total: grupos.length, etapa: 'lote' };
       }
       try {
+        if (fezAlgo) await dormir(RESPIRO_MS);   // respira entre uma chamada e a próxima
         estado.lotes[i] = await escrever(grupos[i], estado.lotes.flat().filter(Boolean));
         fezAlgo = true;
       } catch (e) {
@@ -169,23 +175,25 @@ async function emEtapas(sb, id, { prazo, chave, estado, itens, planejar, escreve
 }
 
 export async function gerarProvaEtapas(sb, id, { av, ctx, conteudos, prazo = Date.now() + 240000 }) {
+  if (av.geracao?.modo) return retocarEtapas(sb, id, { av, ctx, conteudos, prazo, tipo: 'prova' });
+  const { questoes: quantas } = tamanho(av);
   // POR_LOTE entra na chave: se o tamanho do lote mudar, o progresso salvo não serve mais
   // (os índices passariam a apontar para outras questões, gerando duplicatas).
-  const chave = `prova:${POR_LOTE}:${conteudos.map(c => c.id).join(',')}:${av.pedidos || ''}`;
+  const chave = `prova:${POR_LOTE}:${quantas}:${conteudos.map(c => c.id).join(',')}:${av.pedidos || ''}`;
   const g = av.geracao?.chave === chave && av.geracao?.tipo === 'prova' ? av.geracao : { tipo: 'prova', lotes: [] };
   const estado = { ...g, tipo: 'prova', lotes: g.lotes || [] };
   const mapa = mapaAssuntos(conteudos);
   return emEtapas(sb, id, {
     prazo, chave, estado,
-    itens: plano => ajustarPontos(plano.questoes || []).map((q, i) => ({ ...q, n: i + 1 })),
-    planejar: () => planejarProva(ctx, { mapa }),
+    itens: plano => ajustarPontos((plano.questoes || []).slice(0, quantas)).map((q, i) => ({ ...q, n: i + 1 })),
+    planejar: () => planejarProva(ctx, { mapa, quantas }),
     escrever: async (lote, jaFeitas) => {
       const r = await escreverQuestoes(ctx, { plano: estado.plano, lote, jaFeitas, trecho: trechoDe(conteudos, lote.map(q => q.paginas).join(' '), lote.map(q => q.assunto).join(' ')) });
       // uma questão por lote, marcada com o número do plano (para a pontuação casar mesmo se algum lote faltar)
       return (r.questoes || []).slice(0, 1).map(q => ({ ...q, n: lote[0].n }));
     },
     fechar: async (questoesBrutas, plano) => {
-      const doPlano = ajustarPontos(plano.questoes || []);
+      const doPlano = ajustarPontos((plano.questoes || []).slice(0, quantas));
       const questoes = ajustarPontos(questoesBrutas.map(q => ({ ...q, pontos: doPlano[(q.n || 0) - 1]?.pontos || q.pontos })))
         .map(q => ({ ...q, pontuacao: pontuacaoDe(q) }));
       const prova = {
@@ -204,30 +212,114 @@ export async function gerarProvaEtapas(sb, id, { av, ctx, conteudos, prazo = Dat
 }
 
 export async function gerarRevisoesEtapas(sb, id, { av, ctx, conteudos, prazo = Date.now() + 240000 }) {
-  const chave = `revisoes:${POR_LOTE}:${JSON.stringify(av.prova?.resumo_questoes || []).length}`;
+  if (av.geracao?.modo) return retocarEtapas(sb, id, { av, ctx, conteudos, prazo, tipo: 'revisoes' });
+  const { fichas: quantas } = tamanho(av);
+  const chave = `revisoes:${POR_LOTE}:${quantas}:${JSON.stringify(av.prova?.resumo_questoes || []).length}`;
   const g = av.geracao?.chave === chave && av.geracao?.tipo === 'revisoes' ? av.geracao : { tipo: 'revisoes', lotes: [] };
   const estado = { ...g, tipo: 'revisoes', lotes: g.lotes || [] };
   const mapa = mapaAssuntos(conteudos);
   const proibidos = termosProibidos(av.prova);
   return emEtapas(sb, id, {
     prazo, chave, estado,
-    itens: plano => plano.fichas || [],
-    planejar: () => planejarRevisoes(ctx, { mapa, prova: av.prova, proibidos }),
+    itens: plano => (plano.fichas || []).slice(0, quantas),
+    planejar: () => planejarRevisoes(ctx, { mapa, prova: av.prova, proibidos, quantas }),
     escrever: async (lote, jaFeitas) => {
       const r = await escreverFichas(ctx, {
         lote, proibidos, trecho: trechoDe(conteudos, lote.map(f => f.paginas).join(' '), lote.map(f => f.tema).join(' ')),
         jaFeitas: jaFeitas.flatMap(f => (f.perguntas || []).map(p => p.texto)),
       });
-      return r.fichas || [];
+      return (r.fichas || []).slice(0, 1);
     },
     fechar: async (fichas, plano) => {
       const rev = { comando: plano.comando || 'Responda em seu caderno:', fichas };
-      const ch = checarRevisoes(rev, av.prova);
+      const ch = checarRevisoes(rev, av.prova, quantas);
       await sb.from('avaliacoes').update({
         revisoes: rev, geracao: null,
         checagens: { ...(av.checagens || {}), revisoes: { ok: ch.ok, problemas: ch.problemas }, revisoes_desatualizadas: false },
         status: 'revisoes_prontas', updated_at: new Date().toISOString(),
       }).eq('id', id);
+    },
+  });
+}
+
+// ---------- retoque: corrigir ou "pedir uma mudança" sem refazer tudo ----------
+// Antes, os dois botões mandavam a apostila inteira e pediam a prova toda reescrita numa chamada só
+// (o mesmo pedido gigante que travava). Agora: descobre QUAIS itens mudar e reescreve só esses,
+// um por chamada, vendo os demais itens para não repetir nem entregar respostas.
+const nums = (txt, palavra) => [...String(txt).matchAll(new RegExp(`${palavra} (\\d+)`, 'gi'))].map(m => +m[1]);
+
+function alvosDaCorrecao(problemas, palavra) {
+  // "A resposta X da questão 3 aparece escrita na questão 5": reescreve a 3 (troca a resposta dela).
+  // "Ficha 2, pergunta b: usa termo da prova": reescreve a ficha 2.
+  const alvos = new Set();
+  for (const p of problemas || []) { const n = nums(p, palavra)[0]; if (n) alvos.add(n); }
+  return [...alvos].sort((a, b) => a - b).slice(0, 4);   // no máximo 4 por correção
+}
+
+async function retocarEtapas(sb, id, { av, ctx, conteudos, prazo, tipo }) {
+  const ehProva = tipo === 'prova';
+  const atual = ehProva ? av.prova : av.revisoes;
+  const lista = ehProva ? atual.questoes : atual.fichas;
+  const g = av.geracao;
+  const estado = { ...g, lotes: g.lotes || [] };
+  const chave = g.chave || `retoque:${tipo}:${g.modo}:${Date.now()}`;
+  const proibidos = ehProva ? [] : termosProibidos(av.prova);
+  const curto = (x, i) => ehProva ? `${i + 1}. [${x.tipo}] ${x.enunciado} — respostas: ${(x.respostas_chave || []).join(', ')}`
+                                  : `${i + 1}. ${x.tema}: ${(x.perguntas || []).map(p => p.texto).join(' / ')}`;
+  return emEtapas(sb, id, {
+    prazo, chave, estado,
+    itens: plano => plano.alvos || [],
+    planejar: async () => {
+      if (g.modo === 'corrigir') {
+        const probs = (av.checagens?.[tipo]?.problemas) || [];
+        return { alvos: alvosDaCorrecao(probs, ehProva ? 'questão' : 'Ficha').map(n => ({ n, instrucao: probs.filter(p => nums(p, ehProva ? 'questão' : 'Ficha')[0] === n).join(' ') })) };
+      }
+      // "pedir uma mudança": uma chamada minúscula diz quais itens mudar
+      const r = await escolherItens({ pedido: g.pedido, lista: lista.map(curto).join('\n'), oQue: ehProva ? 'questões' : 'fichas de revisão' });
+      return { alvos: [...new Set((r.numeros || []).filter(n => n >= 1 && n <= lista.length))].slice(0, 6).map(n => ({ n, instrucao: `${g.pedido}\n(${r.instrucao || ''})` })) };
+    },
+    escrever: async (lote) => {
+      const alvo = lote[0];
+      const novos = estado.lotes.flat().filter(Boolean);
+      // os outros itens como estão AGORA (já com o que foi reescrito nesta mesma correção)
+      const atuais = lista.map((x, i) => novos.find(nv => nv.n === i + 1) || x);
+      const outros = atuais.filter((_, i) => i + 1 !== alvo.n);
+      const velho = lista[alvo.n - 1];
+      if (ehProva) {
+        const r = await escreverQuestoes(ctx, {
+          plano: { questoes: lista }, jaFeitas: outros,
+          lote: [{ n: alvo.n, tipo: velho.tipo, assunto: velho.enunciado, pontos: velho.pontos }],
+          trecho: trechoDe(conteudos, (velho.gabarito || []).join(' '), velho.enunciado),
+          instrucao: `Reescreva a questão ${alvo.n}. Motivo: ${alvo.instrucao}`,
+        });
+        return (r.questoes || []).slice(0, 1).map(q => ({ ...q, n: alvo.n, pontos: velho.pontos }));
+      }
+      const r = await escreverFichas(ctx, {
+        lote: [{ tema: velho.tema }], proibidos,
+        trecho: trechoDe(conteudos, (velho.perguntas || []).map(p => p.resposta).join(' '), velho.tema),
+        jaFeitas: outros.flatMap(f => (f.perguntas || []).map(p => p.texto)),
+        instrucao: `Reescreva esta ficha. Motivo: ${alvo.instrucao}`,
+      });
+      return (r.fichas || []).slice(0, 1).map(f => ({ ...f, n: alvo.n }));
+    },
+    fechar: async (novos) => {
+      const trocado = lista.map((x, i) => { const nv = novos.find(n => n.n === i + 1); if (!nv) return x; const { n, ...resto } = nv; return resto; });
+      if (ehProva) {
+        const questoes = ajustarPontos(trocado).map(q => ({ ...q, pontuacao: pontuacaoDe(q) }));
+        const prova = { ...atual, questoes, resumo_questoes: questoes.map(q => `[${q.tipo}] ${q.enunciado}`) };
+        const ch = checarProva(prova);
+        await sb.from('avaliacoes').update({
+          prova, termos_proibidos: termosProibidos(prova), geracao: null,
+          checagens: { ...(av.checagens || {}), prova: ch, revisoes_desatualizadas: !!av.revisoes }, updated_at: new Date().toISOString(),
+        }).eq('id', id);
+      } else {
+        const rev = { ...atual, fichas: trocado };
+        const ch = checarRevisoes(rev, av.prova, tamanho(av).fichas);
+        await sb.from('avaliacoes').update({
+          revisoes: rev, geracao: null,
+          checagens: { ...(av.checagens || {}), revisoes: { ok: ch.ok, problemas: ch.problemas } }, updated_at: new Date().toISOString(),
+        }).eq('id', id);
+      }
     },
   });
 }

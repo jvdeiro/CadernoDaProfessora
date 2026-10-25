@@ -34,7 +34,7 @@ export default function Gerador({ id, tipo, existe, bloqueado, checagem, process
     const { data, error } = await sb.from('avaliacoes').select('processando,geracao').eq('id', id).single();
     if (error) throw new Error('falha');
     if (!data) return;
-    setProg(data.geracao ? { feitas: data.geracao.feitas || 0, total: data.geracao.total || null, temPlano: !!data.geracao.plano } : null);
+    setProg(data.geracao ? { feitas: data.geracao.feitas || 0, total: data.geracao.total || null, temPlano: !!data.geracao.plano, modo: data.geracao.modo || null } : null);
     if (data.processando !== tipo) { setFila(false); router.refresh(); }
   }, [id, tipo]);
 
@@ -60,8 +60,13 @@ export default function Gerador({ id, tipo, existe, bloqueado, checagem, process
     const unidades = 1 + totalLotes;
     const concluidas = (prog?.temPlano ? 1 : 0) + (prog?.feitas || 0);
     const pct = Math.min(99, Math.round((concluidas / unidades) * 100));
-    const agora = !prog?.temPlano
-      ? (ehProva ? 'Escolhendo os assuntos e os tipos das 10 questões' : 'Escolhendo os temas das 8 fichas')
+    const retoque = prog?.modo;   // corrigir ou "pedir uma mudança": reescreve só alguns itens
+    const agora = retoque
+      ? (!prog?.temPlano ? 'Vendo o que precisa mudar'
+        : prog?.total ? `Reescrevendo ${Math.min(prog.feitas + 1, prog.total)} de ${prog.total} ${ehProva ? (prog.total > 1 ? 'questões' : 'questão') : (prog.total > 1 ? 'fichas' : 'ficha')}`
+        : 'Nada a reescrever; acertando a pontuação')
+      : !prog?.temPlano
+      ? (ehProva ? 'Escolhendo os assuntos e os tipos das questões' : 'Escolhendo os temas das fichas')
       : prog?.total
         ? `${ehProva ? 'Escrevendo a questão' : 'Escrevendo a ficha'} ${Math.min(prog.feitas + 1, prog.total)} de ${prog.total}`
         : (ehProva ? 'Escrevendo a primeira questão' : 'Escrevendo a primeira ficha');
@@ -69,7 +74,7 @@ export default function Gerador({ id, tipo, existe, bloqueado, checagem, process
       <div className="carregando acompanhamento" role="status" aria-live="polite">
         <Icone n="lapis" className="lapis" />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <b>{ehProva ? 'Criando a prova e o gabarito' : 'Criando as 8 fichas de revisão'}</b>
+          <b>{retoque ? (prog.modo === 'corrigir' ? 'Corrigindo' : 'Fazendo a mudança pedida') : (ehProva ? 'Criando a prova e o gabarito' : 'Criando as fichas de revisão')}</b>
           <span className="agora">{agora}</span>
           <div className="progresso"><i style={{ width: `${Math.max(pct, 2)}%` }} /></div>
           <div className="linha-pct">

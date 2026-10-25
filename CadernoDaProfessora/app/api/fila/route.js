@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { lerPagina, organizarConteudo } from '@/lib/leitura';
+import { tirarUsos } from '@/lib/ia';
 import { avisar } from '@/lib/push';
 import { gerarProvaEtapas, gerarRevisoesEtapas } from '@/lib/geracao';
 import { carregarAvaliacao } from '@/lib/avaliacao';
@@ -14,6 +15,11 @@ export const dynamic = 'force-dynamic';
 const RESPIRO_MS = 8000;        // pausa entre uma foto e outra
 const PAUSA_SEM_IA_S = 90;      // quando nenhuma IA está livre, a apostila descansa um pouco
 const dormir = ms => new Promise(r => setTimeout(r, ms));
+// Grava no banco o consumo das chamadas de IA feitas desde a última gravação (tokens, tempo, erro).
+const gravarUsos = async (sb, extra) => {
+  const u = tirarUsos();
+  if (u.length) await sb.from('ia_uso').insert(u.map(x => ({ ...x, ...extra }))).then(() => {}, () => {});
+};
 const daqui = s => new Date(Date.now() + s * 1000).toISOString();
 
 export async function POST(req) {
@@ -35,10 +41,12 @@ export async function POST(req) {
       const r = await lerPagina(sb, pg.id);
       feitos.push(`foto ${r.numero || pg.id}: ${r.status}`);
     } catch (e) {
+      await gravarUsos(sb, { conteudo_id: pg.conteudo_id });
       feitos.push(`foto ${pg.id}: ${e.message}`);
       await sb.from('conteudos').update({ ultimo_erro: `leitura: ${e.message}`.slice(0, 900), ...(e.temporario ? { pausa_ate: daqui(PAUSA_SEM_IA_S) } : {}) }).eq('id', pg.conteudo_id);
       if (e.temporario) break;
     }
+    await gravarUsos(sb, { conteudo_id: pg.conteudo_id });
     await dormir(RESPIRO_MS);
   }
 
@@ -55,7 +63,7 @@ export async function POST(req) {
         .eq('id', c.id).or(`organizando_em.is.null,organizando_em.lt.${limite}`).select('id');
       if (!travou?.length) continue;
       try {
-        const r = await organizarConteudo(sb, c.id, { prazo: inicio + 250000 });
+        const r = await organizarConteudo(sb, c.id, { prazo: inicio + 250000 }).finally(() => gravarUsos(sb, { conteudo_id: c.id }));
         if (r.pendente) { // tempo da rodada acabou: as partes prontas ficaram salvas, a próxima rodada continua
           await sb.from('conteudos').update({ organizando_em: null }).eq('id', c.id);
           feitos.push(`organizando ${c.titulo}: parte ${r.feitas} de ${r.total}`);
@@ -90,7 +98,7 @@ export async function POST(req) {
         const d = await carregarAvaliacao(sb, a.id);
         if (!d) throw new Error('avaliação sumiu');
         const fn = a.processando === 'revisoes' ? gerarRevisoesEtapas : gerarProvaEtapas;
-        const r = await fn(sb, a.id, { ...d, prazo: inicio + 270000 });
+        const r = await fn(sb, a.id, { ...d, prazo: inicio + 270000 }).finally(() => gravarUsos(sb, { avaliacao_id: a.id }));
         if (r.pendente) {
           await sb.from('avaliacoes').update({ gerando_em: null }).eq('id', a.id);
           feitos.push(`${a.processando} ${a.nome}: ${r.etapa} ${r.feitas || 0}/${r.total ?? '?'}`);
