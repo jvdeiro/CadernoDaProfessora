@@ -93,7 +93,7 @@ export function trechoDe(conteudos, paginas, assunto) {
   let quer = new Set([...numeros(paginas)].filter(n => existe.has(n)));
   if (!quer.size && assunto) quer = new Set([...numeros(paginasDoAssunto(conteudos, assunto))].filter(n => existe.has(n)));
   const escolhidas = quer.size ? todas.filter(p => quer.has(p.numero)) : todas.slice(0, 4);
-  return escolhidas.map(p => p.texto).join('\n\n').slice(0, 14000);
+  return escolhidas.map(p => p.texto).join('\n\n').slice(0, 9000);
 }
 
 const lotes = (arr, tam) => Array.from({ length: Math.ceil(arr.length / tam) }, (_, i) => arr.slice(i * tam, i * tam + tam));
@@ -119,7 +119,7 @@ async function emEtapas(sb, id, { prazo, chave, estado, itens, planejar, escreve
     await salvar();
     return desistir;
   };
-  definirPrazo(prazo);
+  const prazoAnterior = definirPrazo(prazo);
   try {
     if (!estado.plano) {
       const desistiuDoPlano = async () => {
@@ -171,7 +171,7 @@ async function emEtapas(sb, id, { prazo, chave, estado, itens, planejar, escreve
     }
     await fechar(estado.lotes.flat().filter(Boolean), estado.plano);
     return { pronto: true, total: grupos.length };
-  } finally { definirPrazo(0); }
+  } finally { definirPrazo(prazoAnterior); }
 }
 
 export async function gerarProvaEtapas(sb, id, { av, ctx, conteudos, prazo = Date.now() + 240000 }) {

@@ -42,7 +42,7 @@ const instrucaoJSON = tool => `\n\nResponda SOMENTE com um único objeto JSON v�
 
 // Prazo da rodada: nenhuma chamada passa dele. Fica aqui para não ter de atravessar todas as funções.
 let prazoRodada = 0;
-export function definirPrazo(ms) { prazoRodada = ms || 0; }
+export function definirPrazo(ms) { const anterior = prazoRodada; prazoRodada = ms || 0; return anterior; }
 const restaDoPrazo = () => (prazoRodada ? prazoRodada - Date.now() : Infinity);
 
 // Sem racionamento: a IA tem o tempo que a rodada permitir. Não há pressa — se uma questão levar

@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { lerPagina, organizarConteudo } from '@/lib/leitura';
-import { tirarUsos } from '@/lib/ia';
+import { tirarUsos, definirPrazo } from '@/lib/ia';
 import { avisar } from '@/lib/push';
 import { gerarProvaEtapas, gerarRevisoesEtapas } from '@/lib/geracao';
 import { carregarAvaliacao } from '@/lib/avaliacao';
@@ -32,6 +32,11 @@ export async function POST(req) {
   if (eLogin) return NextResponse.json({ erro: 'login do robô falhou' }, { status: 500 });
 
   const feitos = [];
+  // Prazo da rodada para TODA chamada de IA desta execução (a função morre aos 300s). Sem isso, uma
+  // foto lenta passava dos 300s, a função era morta e a página ficava "lendo" por 6 minutos —
+  // e como a fila lê uma foto por vez, a leitura inteira parava.
+  definirPrazo(inicio + 270000);
+  try {
   // 1) Fotos: uma por vez, enquanto houver tempo nesta rodada
   while (Date.now() - inicio < 60000) {
     const { data: pegou } = await sb.rpc('pegar_pagina');
@@ -119,5 +124,6 @@ export async function POST(req) {
     }
   }
 
+  } finally { definirPrazo(0); }
   return NextResponse.json({ ok: true, feitos, ms: Date.now() - inicio });
 }

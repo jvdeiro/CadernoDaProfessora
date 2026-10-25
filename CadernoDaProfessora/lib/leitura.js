@@ -56,7 +56,7 @@ export async function organizarConteudo(sb, id, { prazo = Date.now() + 150000 } 
   };
   await salvar();
 
-  definirPrazo(prazo); // nenhuma chamada de IA passa do prazo desta rodada
+  const prazoAnterior = definirPrazo(prazo); // nenhuma chamada de IA passa do prazo desta rodada
   // Conta a tentativa na parte travada — tanto na falha direta quanto na rodada que acabou sem
   // conseguir nada. Sem isso, uma parte que sempre estoura o tempo fica pendente para sempre.
   const contarTentativa = async i => {
@@ -87,7 +87,7 @@ export async function organizarConteudo(sb, id, { prazo = Date.now() + 150000 } 
       fezAlgo = true;
       await salvar(); // parte guardada: se cair agora, recomeça da próxima
     }
-  } finally { definirPrazo(0); }
+  } finally { definirPrazo(prazoAnterior); }
 
   // Junta as partes (sem IA)
   const todas = partes.map((_, i) => org.feitas[i] || { pulada: true, paginas: partes[i].paginas });
