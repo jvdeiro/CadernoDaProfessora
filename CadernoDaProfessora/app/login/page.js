@@ -14,7 +14,10 @@ export default function Login() {
     const { error } = await createClient().auth.signInWithPassword({ email: email.trim(), password: senha });
     setIndo(false);
     if (error) setErro('E-mail ou senha não conferem. Confira e tente de novo.');
-    else window.location.href = '/';
+    else {
+      const para = new URLSearchParams(window.location.search).get('para') || '';
+      window.location.href = para.startsWith('/') && !para.startsWith('//') ? para : '/';
+    }
   }
   return (
     <div style={{ paddingTop: '2vh' }}>

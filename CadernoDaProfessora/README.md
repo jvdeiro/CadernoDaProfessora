@@ -19,3 +19,8 @@ IA: só modelos abertos (open-weight), em faixas gratuitas. O app passa sozinho 
 
 ## Acesso
 Só e-mails da tabela `membros` enxergam os dados (RLS). Contas são criadas com a função SQL `criar_usuario(email, senha)`.
+
+## Boas-vindas (primeiro acesso)
+Passeio em tela inteira, estilo stories, que apresenta o app. Abre sozinho na tela inicial para a conta que tiver `membros.boas_vindas_pendente = true` (hoje, só a da Catarina) e, ao terminar ou pular, grava `boas_vindas_vista_em`. Depois fica em "Mais → Rever o passeio de boas-vindas" e no link `/boas-vindas`. Para conferir com outra conta sem marcar nada: `/boas-vindas?previa=1`. Textos em `app/boas-vindas/slides.js`; desenhos em `components/Ilustracoes.js`.
+
+Para dar as boas-vindas a outra pessoa: `update membros set boas_vindas_pendente = true where email = '...';`

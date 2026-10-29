@@ -3,6 +3,7 @@ import { contexto, dataBR, dataLonga, cor } from '@/lib/dados';
 import { ItemLink, SemAcesso, Vazio, STATUS } from '@/components/UI';
 import Icone from '@/components/Icone';
 import Personagem from '@/components/Personagem';
+import BoasVindas from '@/components/BoasVindas';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,7 @@ export default async function Inicio() {
   const nome = membro.nome || 'Professora';
   return (
     <>
+      {membro.boas_vindas_pendente && <BoasVindas nome={nome} />}
       <p className="eyebrow">{dataLonga(hoje)}</p>
       <h1>Olá, <span className="hl">{nome}</span>!</h1>
       <Personagem />

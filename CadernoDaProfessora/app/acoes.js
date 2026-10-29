@@ -103,3 +103,12 @@ export async function sair() {
   await sb.auth.signOut();
   redirect('/login');
 }
+
+// Boas-vindas: a pessoa terminou (ou pulou) o passeio de primeiro acesso. Vale só para a própria conta.
+export async function concluirBoasVindas() {
+  const sb = await createClient();
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user?.email) return;
+  await sb.from('membros').update({ boas_vindas_pendente: false, boas_vindas_vista_em: new Date().toISOString() }).eq('email', user.email.toLowerCase());
+  revalidatePath('/'); revalidatePath('/mais');
+}

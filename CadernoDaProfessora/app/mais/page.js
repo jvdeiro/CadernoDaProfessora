@@ -1,6 +1,7 @@
 import { contexto, cor, CORES } from '@/lib/dados';
 import { SemAcesso } from '@/components/UI';
 import { salvarPreferencias, criarMateria, trocarSenha } from '@/app/acoes';
+import Link from 'next/link';
 import Icone from '@/components/Icone';
 import GuardarArquivo from './GuardarArquivo';
 
@@ -37,6 +38,7 @@ export default async function Mais({ searchParams }) {
         <li><b>Revisões:</b> 8 fichas numa folha, “Responda em seu caderno”, sem nada igual à prova.</li>
         <li>Os arquivos saem em <b>.doc</b>, que abre no Word antigo.</li>
       </ol>
+      {(membro.boas_vindas_pendente || membro.boas_vindas_vista_em) && <p className="pequeno"><Link href="/boas-vindas">Rever o passeio de boas-vindas</Link></p>}
 
       <h2 className="faixa">Preferências fixas</h2>
       <p className="suave pequeno">O que você escrever aqui vale para todas as provas e revisões. O sistema já sabe o modelo do Pirralho: escreva só o que quiser mudar ou reforçar.</p>

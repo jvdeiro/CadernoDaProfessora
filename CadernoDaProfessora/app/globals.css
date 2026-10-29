@@ -329,3 +329,52 @@ details.dobra > summary .etq { margin-left: 4px; }
 .versao { text-align: center; font-size: .78rem; color: var(--suave-2); margin: 18px 0 6px; letter-spacing: .02em; }
 .versao b { font-weight: 600; font-family: var(--f-texto); }
 @media print { .versao { display: none; } }
+
+/* ---------- boas-vindas: passeio de primeiro acesso (tela inteira, mecânica de stories) ---------- */
+.bv { position: fixed; top: 0; left: 0; right: 0; height: 100dvh; z-index: 60; display: flex; flex-direction: column; color: var(--tinta);
+  background: radial-gradient(#7c86582b .7px, transparent .8px) var(--papel); background-size: 21px 21px;
+  overscroll-behavior: contain; user-select: none; -webkit-user-select: none; animation: bv-abre .5s ease-out both; }
+.bv:focus { outline: none; }
+.bv.saindo { animation: bv-fecha .35s ease-in forwards; pointer-events: none; }
+.bv-topo, .bv-palco, .bv-rodape { width: 100%; max-width: 560px; margin: 0 auto; }
+.bv-topo { display: flex; align-items: center; gap: 14px; padding: calc(16px + env(safe-area-inset-top)) 20px 0; }
+.bv-prog { display: flex; gap: 5px; flex: 1; }
+.bv-prog i { flex: 1; height: 5px; border-radius: 3px; background: #303a2b1f; position: relative; overflow: hidden; }
+.bv-prog i::after { content: ''; position: absolute; inset: 0; border-radius: 3px; background: var(--tinta); transform: scaleX(0); transform-origin: left; transition: transform .3s ease; }
+.bv-prog i.feito::after { transform: scaleX(1); }
+.bv-prog i.atual { box-shadow: inset 0 0 0 1.2px var(--tinta); }
+.bv-prog i.atual::after { background: var(--c, var(--amarelo)); transform: scaleX(1); animation: bv-enche .6s cubic-bezier(.2,.7,.2,1) both; }
+.bv-pular { background: none; border: 0; padding: 8px 2px; min-height: 44px; color: var(--suave); font-size: .86rem; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.bv-pular:hover { color: var(--tinta); }
+
+.bv-palco { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; padding: 8px 22px 0; touch-action: pan-y; cursor: pointer; }
+.bv-slide { display: flex; flex-direction: column; justify-content: flex-end; }
+.bv-fig { height: clamp(150px, 34dvh, 290px); display: flex; align-items: flex-end; justify-content: center; margin: 0 0 14px; animation: bv-pop .6s cubic-bezier(.2,.7,.2,1) both; }
+.bv-fig svg { height: 100%; width: auto; max-width: 100%; display: block; }
+.bv-fig .saudacao { margin: 0; height: 100%; justify-content: center; }
+.bv-slide .eyebrow, .bv-slide h1, .bv-slide .dek, .bv-nota, .bv-dica { animation: bv-sobe .55s cubic-bezier(.2,.7,.2,1) both; }
+.bv-slide .eyebrow { margin: 0 0 10px; animation-delay: .12s; }
+.bv-slide h1 { font-size: clamp(2.5rem, 9vw, 3.4rem); margin: 0 0 12px; animation-delay: .2s; }
+.bv-slide .dek { font-size: 1.06rem; margin: 0 0 10px; animation-delay: .3s; }
+.bv-nota { font: 700 1.5rem/1.1 var(--f-mao); color: #6f8a45; transform: rotate(-3deg); margin: 2px 0 0 1.4rem; position: relative; animation-delay: .45s; }
+.bv-nota::before { content: '↗'; position: absolute; left: -1.4rem; top: .05rem; }
+.bv-dica { font: 700 1.15rem/1.1 var(--f-mao); color: var(--suave-2); margin: 14px 0 0; text-align: center; animation: bv-sobe .55s .8s both, bv-balanca 1.8s 1.4s ease-in-out infinite; }
+
+.bv-rodape { display: flex; gap: 10px; align-items: center; padding: 14px 20px calc(18px + env(safe-area-inset-bottom)); }
+.bv-rodape .botao { flex: 1; }
+.bv-rodape .botao.claro { flex: 0 0 auto; }
+
+/* confetes do primeiro desenho flutuam de leve */
+.bv-conf > * { animation: bv-flutua 2.6s ease-in-out infinite alternate; }
+.bv-conf > *:nth-child(2n) { animation-delay: -.8s; animation-duration: 3.1s; }
+.bv-conf > *:nth-child(3n) { animation-delay: -1.6s; animation-duration: 2.3s; }
+
+@keyframes bv-abre { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bv-fecha { to { opacity: 0; transform: scale(1.02); } }
+@keyframes bv-enche { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes bv-sobe { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes bv-pop { from { opacity: 0; transform: translateY(10px) scale(.96) rotate(-1.5deg); } to { opacity: 1; transform: none; } }
+@keyframes bv-balanca { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(6px); } }
+@keyframes bv-flutua { from { transform: translateY(0); } to { transform: translateY(-7px); } }
+@media (prefers-reduced-motion: reduce) { .bv, .bv *, .bv-conf > * { animation: none !important; } .bv.saindo { opacity: 0; } }
+@media (min-width: 760px) { .bv-topo { padding-top: 28px; } .bv-palco { padding: 8px 32px 0; } .bv-rodape { padding: 16px 32px 32px; } }

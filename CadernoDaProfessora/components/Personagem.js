@@ -1,7 +1,7 @@
 // Professora desenhada à caneta com balão de fala (traço da pasta visual-thinking).
-const tinta = '#414b39';
+export const tinta = '#414b39';
 
-function Pessoa({ x, y, s = 1 }) {
+export function Pessoa({ x, y, s = 1 }) {
   return (
     <g transform={`translate(${x} ${y}) scale(${s})`} fill="none" stroke={tinta} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <ellipse cx="0" cy="133" rx="45" ry="6" fill="#c4cbb1" opacity=".25" stroke="none" />

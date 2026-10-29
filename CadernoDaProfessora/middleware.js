@@ -18,7 +18,8 @@ export async function middleware(request) {
   const publica = path.startsWith('/login');
   if (!user && !publica) {
     if (path.startsWith('/api/')) return NextResponse.json({ erro: 'Sessão expirada. Entre de novo.' }, { status: 401 });
-    const url = request.nextUrl.clone(); url.pathname = '/login'; url.search = '';
+    const url = request.nextUrl.clone(); url.pathname = '/login';
+    url.search = path !== '/' ? '?para=' + encodeURIComponent(path) : ''; // depois de entrar, volta para a tela pedida (ex.: /boas-vindas)
     return NextResponse.redirect(url);
   }
   return response;
