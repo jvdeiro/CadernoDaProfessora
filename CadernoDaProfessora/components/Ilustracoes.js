@@ -170,10 +170,37 @@ function Celular() {
   );
 }
 
-// 7. Vamos: a professora com o balão de fala.
+// 7. Broto: uma plantinha brotando num vaso, com uma etiqueta "v1": o Caderno ainda vai crescer.
+function Broto() {
+  return (
+    <Svg rotulo="Uma plantinha brotando num vaso com uma etiqueta escrita v1">
+      <Sombra x={130} y={190} rx={56} />
+      {/* planta */}
+      <path d="M130 128q-2-34 4-60" />
+      <path d="M131 100q-30-6-34-34 30 2 34 34Z" fill={C.verde} />
+      <path d="M133 84q4-30 32-36-2 30-32 36Z" fill={C.verde} />
+      <path d="M134 68q0-16 10-24" />
+      <circle cx="146" cy="40" r="6" fill={C.amarelo} />
+      <path d="M100 76l-6 8M90 60l8 2M166 66l6 8M172 50l-8 2" strokeWidth="1.8" stroke="#6f8a45" />
+      {/* vaso */}
+      <path d="M84 124h92v16H84Z" fill={C.pessego} />
+      <path d="M92 140l8 44h60l8-44Z" fill={C.pessego} />
+      <path d="M100 124q30-8 60 0" strokeWidth="1.6" stroke="#8a6a4a" />
+      {/* etiqueta pendurada */}
+      <path d="M176 136q14 6 16 22" strokeWidth="1.6" strokeDasharray="3 4" />
+      <g transform="rotate(12 206 170)">
+        <path d="M190 158h32v26h-32l-6-13Z" fill={C.amarelo} />
+        <circle cx="192" cy="171" r="2" fill={tinta} stroke="none" />
+        <Mao x={208} y={178} s={19}>v1</Mao>
+      </g>
+    </Svg>
+  );
+}
+
+// 8. Vamos: a professora com o balão de fala.
 function Vamos() {
   return <Personagem falas={['Vamos', 'começar?']} largura={340} />;
 }
 
-const ILUSTRACOES = { presente: Presente, caderno: Caderno, camera: Camera, prova: Prova, calendario: Calendario, celular: Celular, vamos: Vamos };
+const ILUSTRACOES = { presente: Presente, caderno: Caderno, camera: Camera, prova: Prova, calendario: Calendario, celular: Celular, broto: Broto, vamos: Vamos };
 export default ILUSTRACOES;

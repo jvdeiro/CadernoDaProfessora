@@ -40,6 +40,12 @@ const SLIDES = [
     texto: 'No celular, abra o menu do navegador e toque em “Adicionar à Tela de Início”. O Caderno vira um app e pode te avisar quando a prova ficar pronta.',
   },
   {
+    id: 'inicial', cor: 'var(--verde)', figura: 'broto',
+    rotulo: 'Um aviso',
+    titulo: 'Ainda está *brotando*',
+    texto: 'Esta é uma versão bem inicial: alguma coisa pode falhar ou sair estranha. Quando acontecer, me conta que eu arrumo. Aos poucos o Caderno vai ficando do seu jeito.',
+  },
+  {
     id: 'pronto', cor: 'var(--amarelo)', figura: 'vamos',
     rotulo: 'Pronto',
     titulo: 'Vamos *começar*?',
