@@ -6,14 +6,14 @@ const SLIDES = [
     id: 'aniversario', cor: 'var(--rosa)', figura: 'presente',
     rotulo: '25 de outubro',
     titulo: 'Feliz aniversário, *mãe*!',
-    texto: 'O presente atrasou um pouquinho, mas foi feito com muito carinho: um caderno só seu, para cada dia de aula ficar mais leve.',
+    texto: 'O presente atrasou um pouquinho, mas foi feito com muito carinho, pensando nos seus dias de aula.',
     nota: 'com amor, João',
   },
   {
     id: 'caderno', cor: 'var(--amarelo)', figura: 'caderno',
     rotulo: 'Seu presente',
     titulo: 'Este é o seu *Caderno*',
-    texto: 'Turmas, apostilas, aulas, provas e revisões, tudo num lugar só. Ele já conhece o jeito do Pirralho: você só diz o que precisa e ele prepara.',
+    texto: 'Turmas, apostilas, aulas, provas e revisões, tudo num lugar só. Ele já sabe o modelo das provas do Pirralho: você diz o que precisa e ele prepara.',
   },
   {
     id: 'apostila', cor: 'var(--pessego)', figura: 'camera',
@@ -43,7 +43,7 @@ const SLIDES = [
     id: 'inicial', cor: 'var(--verde)', figura: 'broto',
     rotulo: 'Um aviso',
     titulo: 'Ainda está *brotando*',
-    texto: 'Esta é uma versão bem inicial: alguma coisa pode falhar ou sair estranha. Quando acontecer, me conta que eu arrumo. Aos poucos o Caderno vai ficando do seu jeito.',
+    texto: 'Esta é uma versão bem inicial: alguma coisa pode falhar ou sair estranha. Quando acontecer, me conta que eu arrumo. Aos poucos ele vai melhorando.',
   },
   {
     id: 'pronto', cor: 'var(--amarelo)', figura: 'vamos',
